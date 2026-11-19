@@ -187,9 +187,28 @@ final class FilmStripNSView: NSView {
         if ed.mode == .source, let m = ed.currentMedia, m.markIn != nil || m.markOut != nil {
             let grease = CGColor.hex(0xF6EEB4)
             ctx.setStrokeColor(grease); ctx.setLineCap(.round)
-            let ya = yOf(m.markIn ?? 0), yb = yOf(m.markOut ?? m.duration)
-            ctx.setAlpha(0.85); ctx.setLineWidth(3)
-            ctx.move(to: CGPoint(x: fx + filmW + 7, y: ya)); ctx.addLine(to: CGPoint(x: fx + filmW + 7, y: yb)); ctx.strokePath()
+            // With both marks the line spans IN–OUT. With only one, it is "being drawn": it runs from
+            // that mark to the frame in the gate and grows as you crank the film.
+            let lineX = fx + filmW + 7
+            let pending = m.markIn == nil || m.markOut == nil
+            let ya: CGFloat, yb: CGFloat
+            if let a = m.markIn, let b = m.markOut {
+                ya = yOf(a); yb = yOf(b)
+            } else {
+                let anchor = m.markIn ?? m.markOut ?? 0
+                let f = m.fps, t = ed.time
+                let k = (t * f + 1e-6).rounded(.down)
+                // reach the far edge of the gate frame, on whichever side of the mark the playhead is
+                let head = t >= anchor ? (k + 1) / f : k / f
+                ya = yOf(anchor); yb = yOf(min(max(head, 0), m.duration))
+            }
+            ctx.setAlpha(pending ? 0.6 : 0.85); ctx.setLineWidth(3)
+            ctx.move(to: CGPoint(x: lineX, y: ya)); ctx.addLine(to: CGPoint(x: lineX, y: yb)); ctx.strokePath()
+            if pending && abs(yb - ya) > 1 {
+                // the pencil tip
+                ctx.setAlpha(0.95); ctx.setFillColor(grease)
+                ctx.fillEllipse(in: CGRect(x: lineX - 3, y: yb - 3, width: 6, height: 6))
+            }
             ctx.setAlpha(1)
             let attrs: [NSAttributedString.Key: Any] = [.font: Self.handFont, .foregroundColor: NSColor(cgColor: grease)!]
             func mark(_ t: Double, _ label: String, _ off: CGFloat) {
