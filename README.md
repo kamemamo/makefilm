@@ -25,9 +25,12 @@
 
 ```bash
 cd mac
-./scripts/build-app.sh          # build/MakeFilm.app ができる
+./scripts/build-app.sh               # build/MakeFilm.app ができる
+./scripts/build-app.sh --universal   # 配布用（Apple Silicon + Intel）
 open build/MakeFilm.app
 ```
+
+ビルド済みのアプリは [Releases](https://github.com/kamemamo/makefilm/releases) からもダウンロードできます。バージョンは `mac/Info.plist` の `CFBundleShortVersionString` で管理し、アプリのヘッダーにも表示されます。
 
 開発中は `swift run` でも起動できます（`cd mac && swift run MakeFilm ../samples/sample.mp4`）。引数に動画ファイルを渡すと素材として読み込みます。
 

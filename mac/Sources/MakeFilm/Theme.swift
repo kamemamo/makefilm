@@ -49,3 +49,10 @@ enum TC {
         return String(format: "%d+%02d", fr / 16, fr % 16)
     }
 }
+
+/// Version from Info.plist (nil when running unbundled via `swift run`).
+enum AppVersion {
+    static var short: String? { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String }
+    static var build: String? { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String }
+    static var full: String { "MakeFilm \(short ?? "dev") (\(build ?? "-"))" }
+}

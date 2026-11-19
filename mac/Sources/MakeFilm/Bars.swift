@@ -38,9 +38,15 @@ struct HeaderBar: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            (Text("MAKE").foregroundStyle(Theme.text) + Text("FILM").foregroundStyle(Theme.accent))
-                .font(.system(size: 13, weight: .heavy)).tracking(3.5)
-                .padding(.trailing, 8)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                (Text("MAKE").foregroundStyle(Theme.text) + Text("FILM").foregroundStyle(Theme.accent))
+                    .font(.system(size: 13, weight: .heavy)).tracking(3.5)
+                if let v = AppVersion.short {
+                    Text("v\(v)").font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.muted)
+                        .help(AppVersion.full)
+                }
+            }
+            .padding(.trailing, 8)
             HStack(spacing: 0) {
                 Button { editor.setMode(.source) } label: { HStack(spacing: 4) { Text("素材"); Kbd("1") } }
                     .buttonStyle(FilmButtonStyle(on: editor.mode == .source))
