@@ -287,7 +287,7 @@ Editor（アプリ状態）
 | `mac/Package.swift` | Swift Package 定義（macOS 14、実行ターゲット MakeFilm） |
 | `mac/Info.plist` | バンドル情報（`local.makefilm.app`、バージョン） |
 | `mac/scripts/build-app.sh` | ビルドして `build/MakeFilm.app` を組み立て、アドホック署名 |
-| `mac/scripts/make-icon.swift` | アプリアイコン（案 A「ゲート」）を 1024px で描画 |
+| `mac/scripts/make-icon.swift` | アプリアイコン（ゲートのコマと MAKE / FILM のタイトルカード）を 1024px で描画 |
 | `mac/Resources/` | `AppIcon-1024.png`（原画）と `AppIcon.icns`（バンドルに同梱） |
 | `Sources/MakeFilm/MakeFilmApp.swift` | アプリ本体・メニュー・画面の骨組み・キー入力・ドロップ・終了確認 |
 | `Editor.swift` | 状態と編集操作、トランスポート、キー割り当て |
