@@ -175,8 +175,8 @@ struct FilmSurroundView: View {
                     gc.draw(Image(decorative: img, scale: 1).resizable(),
                             in: CGRect(x: r.midX - w / 2, y: r.midY - h / 2, width: w, height: h))
                 }
-                // edge number, printed outside the perforations
-                let label = Text(TC.feet(Double(c) / F)).font(edge).foregroundStyle(Theme.accent.opacity(0.7))
+                // edge print: the timecode of this frame, outside the perforations
+                let label = Text(TC.string(Double(c) / F, fps: editor.engine.fps)).font(edge).foregroundStyle(Theme.accent.opacity(0.7))
                 var g = gc
                 g.translateBy(x: Film35.perfLeftX * mm * 0.45, y: yc)
                 g.rotate(by: .degrees(-90))

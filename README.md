@@ -10,7 +10,7 @@ When the cut is done, hand it over to Final Cut Pro, Premiere Pro or DaVinci Res
 
 - **Vertical film strip** — the strip on the left has perforations (4 per frame), a seconds ruler and grease-pencil IN/OUT marks. Drag or scroll to crank it, with inertia. The film can run up (default) or down (Moviola style)
 - **Optical soundtrack** — the audio is drawn as a two-track bilateral variable-area soundtrack between the left perforations and the picture, just like on a 35mm print. Strip and viewer use real 35mm print proportions (Academy frame, KS perforations at the edges)
-- **The viewer is a gate** — the picture sits on a continuous strip of film, with the previous and next frames above and below, perforations and edge numbers at the sides. While playing, the film advances a frame at a time like a projector's claw
+- **The viewer is a gate** — the picture sits on a continuous strip of film, with the previous and next frames above and below, perforations and the timecode printed along the edge. While playing, the film advances a frame at a time like a projector's claw
 - **Pedal** — speeds from −4× to 4×, true reverse playback and frame-accurate stepping (native AVFoundation playback)
 - **Splicing and the trim bin** — mark IN/OUT and splice; each cut hangs in the bin at a length proportional to its duration. Drag to reorder (⌥-drag to duplicate), copy/paste cuts, cut and lift at the gate, undo/redo
 - **Projects** — `.makefilm` files store the source locations, IN/OUT marks, the reel and view settings. Open Recent, reopens the last project at launch, asks before discarding unsaved changes. Moved sources are found relative to the project file, or you can point to their new location
