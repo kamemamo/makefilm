@@ -23,7 +23,69 @@ struct ThumbView: View {
     }
 }
 
-struct SidePanel: View {
+func sectionTitle(_ s: String, trailing: String) -> some View {
+    HStack {
+        Text(s); Spacer(); Text(trailing).font(.system(size: 11, design: .monospaced))
+    }
+    .font(.system(size: 11, weight: .semibold))
+    .tracking(1.5)
+    .foregroundStyle(Theme.muted)
+    .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
+}
+
+/// Trim bin across the bottom of the window: clips hang from a rack, left to right in reel order.
+struct TrimBinView: View {
+    let editor: Editor
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionTitle("トリムビン（リール順）",
+                         trailing: editor.reel.isEmpty ? "" : "\(editor.reel.count) カット · " + TC.string(editor.reelDuration, fps: 24))
+                .padding(.top, -4)
+            // the rack the clips hang from
+            RoundedRectangle(cornerRadius: 3)
+                .fill(LinearGradient(colors: [Color(hex: 0x6B7366), Color(hex: 0x3C433A)], startPoint: .top, endPoint: .bottom))
+                .frame(height: 6)
+                .padding(.horizontal, 10)
+
+            if editor.reel.isEmpty {
+                Text("素材で I・O を付けて Return（スプライス）すると、ここに吊るされます。ドラッグで並べ替え、ホイールで左右にスクロール。")
+                    .font(.system(size: 12)).foregroundStyle(Theme.muted)
+                    .padding(14)
+                Spacer(minLength: 0)
+            } else {
+                GeometryReader { geo in
+                    // Clips hang at lengths proportional to their running time.
+                    // The longest one fills the bin's height; every clip shows at least one frame.
+                    let filmMax = max(ClipCard.minFilm, geo.size.height - ClipCard.chrome)
+                    let longest = max(editor.reel.map(\.length).max() ?? 1, 0.001)
+                    let pxPerSec = filmMax / longest
+                    HorizontalScroll(scrollToEndToken: editor.reel.count) {
+                        HStack(alignment: .top, spacing: 10) {
+                            ForEach(Array(editor.reel.enumerated()), id: \.element.id) { i, seg in
+                                ClipCard(editor: editor, index: i, segment: seg,
+                                         filmHeight: max(ClipCard.minFilm, seg.length * pxPerSec))
+                            }
+                            Color.clear.frame(width: 60, height: filmMax)
+                                .contentShape(Rectangle())
+                                .dropDestination(for: String.self) { items, _ in
+                                    guard let s = items.first, let id = UUID(uuidString: s) else { return false }
+                                    editor.move(id, before: nil); return true
+                                }
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(height: geo.size.height, alignment: .top)
+                        .animation(.easeOut(duration: 0.25), value: editor.reel)
+                        .foregroundStyle(Theme.text)
+                    }
+                }
+            }
+        }
+        .background(Theme.panel)
+    }
+}
+
+struct MediaPanel: View {
     let editor: Editor
 
     var body: some View {
@@ -35,58 +97,9 @@ struct SidePanel: View {
                 }
                 .padding(.horizontal, 8)
             }
-            .frame(maxHeight: 190)
-
-            sectionTitle("トリムビン（リール順）",
-                         trailing: editor.reel.isEmpty ? "" : TC.string(editor.reelDuration, fps: 24))
-            // the rack the clips hang from
-            RoundedRectangle(cornerRadius: 3)
-                .fill(LinearGradient(colors: [Color(hex: 0x6B7366), Color(hex: 0x3C433A)], startPoint: .top, endPoint: .bottom))
-                .frame(height: 6)
-                .padding(.horizontal, 10)
-
-            if editor.reel.isEmpty {
-                Text("素材で I・O を付けて Return（スプライス）すると、ここに吊るされます。ドラッグで並べ替え。")
-                    .font(.system(size: 12)).foregroundStyle(Theme.muted)
-                    .padding(14)
-                Spacer()
-            } else {
-                GeometryReader { geo in
-                    // Clips hang at lengths proportional to their running time.
-                    // The longest one fills the bin's height; every clip shows at least one frame.
-                    let filmMax = max(ClipCard.minFilm, geo.size.height - ClipCard.chrome)
-                    let longest = max(editor.reel.map(\.length).max() ?? 1, 0.001)
-                    let pxPerSec = filmMax / longest
-                    ScrollView(.horizontal) {
-                        HStack(alignment: .top, spacing: 10) {
-                            ForEach(Array(editor.reel.enumerated()), id: \.element.id) { i, seg in
-                                ClipCard(editor: editor, index: i, segment: seg,
-                                         filmHeight: max(ClipCard.minFilm, seg.length * pxPerSec))
-                            }
-                            Color.clear.frame(width: 40, height: filmMax)
-                                .dropDestination(for: String.self) { items, _ in
-                                    guard let s = items.first, let id = UUID(uuidString: s) else { return false }
-                                    editor.move(id, before: nil); return true
-                                }
-                        }
-                        .padding(.horizontal, 10)
-                        .animation(.easeOut(duration: 0.25), value: editor.reel)
-                    }
-                }
-            }
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Theme.panel)
-    }
-
-    private func sectionTitle(_ s: String, trailing: String) -> some View {
-        HStack {
-            Text(s); Spacer(); Text(trailing).font(.system(size: 11, design: .monospaced))
-        }
-        .font(.system(size: 11, weight: .semibold))
-        .tracking(1.5)
-        .foregroundStyle(Theme.muted)
-        .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
     }
 
     private func mediaRow(_ m: MediaClip) -> some View {

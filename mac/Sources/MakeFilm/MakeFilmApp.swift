@@ -9,10 +9,10 @@ struct MakeFilmApp: App {
     var body: some Scene {
         Window("MakeFilm", id: "main") {
             ContentView(editor: editor)
-                .frame(minWidth: 1000, minHeight: 640)
+                .frame(minWidth: 1100, minHeight: 760)
                 .preferredColorScheme(.dark)
         }
-        .defaultSize(width: 1320, height: 840)
+        .defaultSize(width: 1360, height: 920)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("素材を開く…") { editor.openPanel() }.keyboardShortcut("o")
@@ -54,11 +54,18 @@ struct ContentView: View {
                     .frame(maxHeight: .infinity)
                     .clipped()
                 Divider().overlay(Theme.line)
-                ViewerView(editor: editor)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                Divider().overlay(Theme.line)
-                SidePanel(editor: editor)
-                    .frame(width: 320)
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        ViewerView(editor: editor)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        Divider().overlay(Theme.line)
+                        MediaPanel(editor: editor)
+                            .frame(width: 260)
+                    }
+                    Divider().overlay(Theme.line)
+                    TrimBinView(editor: editor)
+                        .frame(height: 260)
+                }
             }
             Divider().overlay(Theme.line)
             TransportBar(editor: editor)
