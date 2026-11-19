@@ -187,19 +187,25 @@ final class FilmStripNSView: NSView {
         if ed.mode == .source, let m = ed.currentMedia, m.markIn != nil || m.markOut != nil {
             let grease = CGColor.hex(0xF6EEB4)
             ctx.setStrokeColor(grease); ctx.setLineCap(.round)
+            // Marks sit on the frame lines of the strip: IN on the line before its frame (against the
+            // previous material), OUT on the line after its frame (against what follows). The edit
+            // points themselves stay frame-accurate; this is only where the pencil goes.
+            let lineBefore: (Double) -> Double = { t in (t * F + 1e-6).rounded(.down) / F }
+            let lineAfter: (Double) -> Double = { t in (t * F - 1e-6).rounded(.up) / F }
+            let inLine = m.markIn.map(lineBefore), outLine = m.markOut.map(lineAfter)
+
             // With both marks the line spans IN–OUT. With only one, it is "being drawn": it runs from
-            // that mark to the frame in the gate and grows as you crank the film.
+            // that mark to the frame line past the gate frame and grows as you crank the film.
             let lineX = fx + filmW + 7
             let pending = m.markIn == nil || m.markOut == nil
             let ya: CGFloat, yb: CGFloat
-            if let a = m.markIn, let b = m.markOut {
+            if let a = inLine, let b = outLine {
                 ya = yOf(a); yb = yOf(b)
             } else {
-                let anchor = m.markIn ?? m.markOut ?? 0
-                let f = m.fps, t = ed.time
-                let k = (t * f + 1e-6).rounded(.down)
-                // reach the far edge of the gate frame, on whichever side of the mark the playhead is
-                let head = t >= anchor ? (k + 1) / f : k / f
+                let anchor = inLine ?? outLine ?? 0
+                let t = ed.time
+                let k = (t * F + 1e-6).rounded(.down)
+                let head = t >= anchor ? (k + 1) / F : k / F
                 ya = yOf(anchor); yb = yOf(min(max(head, 0), m.duration))
             }
             ctx.setAlpha(pending ? 0.6 : 0.85); ctx.setLineWidth(3)
@@ -216,7 +222,7 @@ final class FilmStripNSView: NSView {
                 ctx.setLineWidth(2.5)
                 var x: CGFloat = 0
                 while x <= filmW + 10 {
-                    let yy = y + sin(x * 0.45 + CGFloat(t) * 7) * 1.6
+                    let yy = y + sin(x * 0.45 + CGFloat(t) * 7) * 1.2
                     x == 0 ? ctx.move(to: CGPoint(x: fx - 5 + x, y: yy)) : ctx.addLine(to: CGPoint(x: fx - 5 + x, y: yy))
                     x += 6
                 }
@@ -224,8 +230,8 @@ final class FilmStripNSView: NSView {
                 let s = label as NSString, sz = s.size(withAttributes: attrs)
                 s.draw(at: CGPoint(x: fx + filmW + 11, y: y + off * dir - sz.height / 2), withAttributes: attrs)
             }
-            if let a = m.markIn { mark(a, "IN", 12) }
-            if let b = m.markOut { mark(b, "OUT", -12) }
+            if let a = inLine { mark(a, "IN", 12) }
+            if let b = outLine { mark(b, "OUT", -12) }
         }
 
         // the gate: lit aperture with corner brackets
