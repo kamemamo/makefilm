@@ -30,6 +30,13 @@ final class Editor {
     var undoStack: [[Segment]] = []
     var redoStack: [[Segment]] = []
 
+    // MARK: project (see Project.swift)
+    var projectURL: URL?
+    /// What was last saved/opened; the project is "edited" when the current state differs.
+    var savedCore = ProjectCore()
+    var recentProjects: [URL] = Editor.loadRecents()
+    @ObservationIgnored var launchHandled = false
+
     // MARK: per-frame state (not observed)
     @ObservationIgnored let engine = PlaybackEngine()
     @ObservationIgnored let thumbs = ThumbnailStore()
@@ -37,7 +44,7 @@ final class Editor {
     @ObservationIgnored var fling: Double = 0
     @ObservationIgnored private var lastTick: CFTimeInterval = 0
     @ObservationIgnored private var manualSpeed: Double = 0
-    @ObservationIgnored private var reelTime: Double = 0
+    @ObservationIgnored var reelTime: Double = 0
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored var exportSession: AVAssetExportSession?
 
@@ -50,7 +57,7 @@ final class Editor {
     // MARK: derived
 
     var currentMedia: MediaClip? { media.first { $0.id == currentMediaID } }
-    private var currentIndex: Int? { media.firstIndex { $0.id == currentMediaID } }
+    var currentIndex: Int? { media.firstIndex { $0.id == currentMediaID } }
     func clip(_ id: UUID) -> MediaClip? { media.first { $0.id == id } }
     var clipMap: [UUID: MediaClip] { Dictionary(uniqueKeysWithValues: media.map { ($0.id, $0) }) }
 
@@ -86,7 +93,9 @@ final class Editor {
     }
 
     func importURLs(_ urls: [URL]) {
-        for url in urls {
+        launchHandled = true
+        let have = Set(media.map { $0.url.standardizedFileURL.path })
+        for url in urls where !have.contains(url.standardizedFileURL.path) {
             Task {
                 do {
                     let m = try await MediaClip.load(url: url)
@@ -107,12 +116,12 @@ final class Editor {
         reloadPlayer(at: currentMedia?.lastTime ?? 0)
     }
 
-    private func rememberPosition() {
+    func rememberPosition() {
         if mode == .source, let i = currentIndex { media[i].lastTime = time }
         if mode == .reel { reelTime = time }
     }
 
-    private func reloadPlayer(at t: Double) {
+    func reloadPlayer(at t: Double) {
         manualSpeed = 0
         speed = 0
         fling = 0

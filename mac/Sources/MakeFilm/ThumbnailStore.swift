@@ -41,6 +41,13 @@ final class ThumbnailStore {
         }
     }
 
+    /// Forget every clip (used when another project is opened).
+    func removeAll() {
+        for g in generators.values { g.cancelAllCGImageGeneration() }
+        generators.removeAll(); maxIndex.removeAll(); focus.removeAll(); keep.removeAll()
+        reset()
+    }
+
     func reset() {
         images.removeAll(); order.removeAll(); want.removeAll(); failed.removeAll()
         for id in generators.keys {

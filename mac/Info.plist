@@ -13,5 +13,30 @@
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.video</string>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key><string>local.makefilm.project</string>
+            <key>UTTypeDescription</key><string>MakeFilm プロジェクト</string>
+            <key>UTTypeConformsTo</key><array><string>public.json</string><string>public.data</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict><key>public.filename-extension</key><array><string>makefilm</string></array></dict>
+        </dict>
+    </array>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>MakeFilm プロジェクト</string>
+            <key>CFBundleTypeRole</key><string>Editor</string>
+            <key>LSHandlerRank</key><string>Owner</string>
+            <key>LSItemContentTypes</key><array><string>local.makefilm.project</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key><string>動画</string>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>Alternate</string>
+            <key>LSItemContentTypes</key><array><string>public.movie</string></array>
+        </dict>
+    </array>
 </dict>
 </plist>

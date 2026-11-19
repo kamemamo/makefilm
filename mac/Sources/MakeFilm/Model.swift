@@ -8,7 +8,7 @@ struct LoadError: LocalizedError {
 
 /// A source clip loaded from disk.
 struct MediaClip: Identifiable {
-    let id = UUID()
+    var id = UUID()
     let url: URL
     let name: String
     let asset: AVURLAsset
@@ -27,7 +27,7 @@ struct MediaClip: Identifiable {
 
     var aspect: Double { Double(displaySize.width / max(displaySize.height, 1)) }
 
-    static func load(url: URL) async throws -> MediaClip {
+    static func load(url: URL, id: UUID = UUID()) async throws -> MediaClip {
         let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         let duration = try await asset.load(.duration).seconds
         guard let video = try await asset.loadTracks(withMediaType: .video).first else {
@@ -36,7 +36,7 @@ struct MediaClip: Identifiable {
         let (size, transform, rate) = try await video.load(.naturalSize, .preferredTransform, .nominalFrameRate)
         let audio = try await asset.loadTracks(withMediaType: .audio).first
         let rect = CGRect(origin: .zero, size: size).applying(transform)
-        return MediaClip(url: url, name: url.lastPathComponent, asset: asset,
+        return MediaClip(id: id, url: url, name: url.lastPathComponent, asset: asset,
                          duration: duration, fps: rate > 0 ? Double(rate) : 24,
                          displaySize: CGSize(width: abs(rect.width), height: abs(rect.height)),
                          naturalSize: size, preferredTransform: transform,
