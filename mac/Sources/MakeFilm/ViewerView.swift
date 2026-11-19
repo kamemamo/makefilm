@@ -114,8 +114,11 @@ struct FilmSurroundView: View {
     let layout: FilmLayout
 
     var body: some View {
-        TimelineView(.animation) { _ in
-            Canvas { gc, size in draw(gc, size) }
+        TimelineView(.animation) { tl in
+            // Using the tick's date makes every frame a new drawing, so moving film and
+            // newly generated neighbour frames show up immediately.
+            let tick = tl.date
+            Canvas { gc, size in draw(gc, size, tick) }
         }
         .frame(width: layout.film.width, height: layout.film.height)
     }
@@ -133,7 +136,7 @@ struct FilmSurroundView: View {
         return forward ? c + 0.5 + k : c + 0.5 - k
     }
 
-    private func draw(_ gc: GraphicsContext, _ size: CGSize) {
+    private func draw(_ gc: GraphicsContext, _ size: CGSize, _ tick: Date) {
         let L = layout
         let F = Double(editor.stripFPS)
         let dir = CGFloat(editor.direction)
@@ -152,7 +155,9 @@ struct FilmSurroundView: View {
         let fh = L.frameH
         let reach = Int((midY / fh).rounded(.up)) + 1
         let c0 = Int(d.rounded(.down))
-        let perfW = L.rail * 0.42, perfH = fh / 4 * 0.5
+        // 35mm (KS) perforations are wider than tall: about 2.8 × 2.0 mm on a 4.75 mm pitch.
+        var perfH = fh / 4 * 0.42, perfW = perfH * 1.41
+        if perfW > L.rail * 0.6 { perfW = L.rail * 0.6; perfH = perfW / 1.41 }
         let edge = Font.system(size: max(8, L.rail * 0.13), weight: .semibold, design: .monospaced)
 
         for c in (c0 - reach)...(c0 + reach) {
@@ -164,7 +169,7 @@ struct FilmSurroundView: View {
             for j in 0..<4 {
                 let py = top + (CGFloat(j) + 0.5) * fh / 4 - perfH / 2
                 for x in [(L.rail - perfW) / 2, size.width - L.rail + (L.rail - perfW) / 2] {
-                    gc.fill(Path(roundedRect: CGRect(x: x, y: py, width: perfW, height: perfH), cornerRadius: perfW * 0.12),
+                    gc.fill(Path(roundedRect: CGRect(x: x, y: py, width: perfW, height: perfH), cornerRadius: perfH * 0.28),
                             with: .color(Color(hex: 0x0F110F)))
                 }
             }

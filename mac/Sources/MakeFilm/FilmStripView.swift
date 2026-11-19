@@ -97,7 +97,9 @@ final class FilmStripNSView: NSView {
         let kc = Int(p.rounded(.down))
         let ahead = ed.speed == 0 ? 0 : (ed.speed > 0 ? 1 : -1)
         var bestD = Double.infinity
-        let ph = cellH / 4 * 0.52, pw = perfM * 0.46
+        // landscape KS perforations, ~1.41 : 1
+        var ph = cellH / 4 * 0.42, pw = ph * 1.41
+        if pw > perfM * 0.6 { pw = perfM * 0.6; ph = pw / 1.41 }
         let rulerAttrs: [NSAttributedString.Key: Any] = [.font: Self.monoFont, .foregroundColor: NSColor(white: 0.5, alpha: 1)]
 
         for k in (kc - half - pre)...(kc + half + pre) {
@@ -119,10 +121,10 @@ final class FilmStripNSView: NSView {
             ctx.setFillColor(.hex(0x0F110F))
             for j in 0..<4 {
                 let py = y0 + (CGFloat(j) + 0.5) * cellH / 4 - ph / 2
-                ctx.addPath(CGPath(roundedRect: CGRect(x: fx + perfM * 0.27, y: py, width: pw, height: ph),
-                                   cornerWidth: 2, cornerHeight: 2, transform: nil))
-                ctx.addPath(CGPath(roundedRect: CGRect(x: fx + filmW - perfM * 0.27 - pw, y: py, width: pw, height: ph),
-                                   cornerWidth: 2, cornerHeight: 2, transform: nil))
+                ctx.addPath(CGPath(roundedRect: CGRect(x: fx + (perfM - pw) / 2, y: py, width: pw, height: ph),
+                                   cornerWidth: ph * 0.28, cornerHeight: ph * 0.28, transform: nil))
+                ctx.addPath(CGPath(roundedRect: CGRect(x: fx + filmW - perfM + (perfM - pw) / 2, y: py, width: pw, height: ph),
+                                   cornerWidth: ph * 0.28, cornerHeight: ph * 0.28, transform: nil))
             }
             ctx.fillPath()
 

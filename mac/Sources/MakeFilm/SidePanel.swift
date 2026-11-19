@@ -194,8 +194,8 @@ struct FilmEdge: View {
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.film))
             var y: CGFloat = 2
             while y < size.height {
-                for x in [CGFloat(2), size.width - 6] {
-                    ctx.fill(Path(roundedRect: CGRect(x: x, y: y, width: 4, height: 4), cornerRadius: 1),
+                for x in [CGFloat(1.5), size.width - 6.5] {
+                    ctx.fill(Path(roundedRect: CGRect(x: x, y: y, width: 5, height: 3.5), cornerRadius: 1),
                              with: .color(Theme.hole))
                 }
                 y += 8
