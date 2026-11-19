@@ -66,6 +66,8 @@ XML は元の素材ファイルを参照します。書き出したあとは素�
 mac/                     Mac アプリ（SwiftUI + AVFoundation, Swift Package）
   Sources/MakeFilm/      ソース
   scripts/build-app.sh   .app を組み立てるスクリプト
+  scripts/make-icon.swift アプリアイコンを描くスクリプト
+  Resources/             アイコン（AppIcon.icns と 1024px の原画）
 index.html               最初の Web 試作（ブラウザで開くだけで動く）
 samples/sample.mp4       動作確認用のテスト映像（ffmpeg で生成したカラーバー）
 ```
