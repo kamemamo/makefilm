@@ -70,10 +70,10 @@ extension Editor {
 
     /// Load audio files and lay them on the sound reel, starting at the gate (one after another).
     func importMusic(_ urls: [URL]) {
-        guard !reel.isEmpty else { toast(L("先にリールにカットを継いでください")); return }
         Task {
-            if mode != .reel { setMode(.reel) }
-            var at = mode == .reel ? (locate(time, in: reel).map { $0.start + max(0, time - $0.start) } ?? 0) : 0
+            // At the gate in the reel; from the Source view, where the reel was last left.
+            let wasReel = mode == .reel
+            var at = wasReel ? time : reelTime
             var added: [MusicClip] = []
             for url in urls {
                 do {
@@ -92,7 +92,14 @@ extension Editor {
             music.append(contentsOf: added)
             music.sort { $0.at < $1.at }
             selectedMusicID = added.last?.id
-            musicChanged()
+            if wasReel {
+                musicChanged()
+            } else {
+                // music can start a reel on its own: cut the picture to it afterwards
+                rememberPosition()
+                mode = .reel
+                reloadPlayer(at: added.first?.at ?? 0)
+            }
             toast(L("サウンドリールに置きました: %@", added.compactMap { source($0.sourceID)?.name }.joined(separator: ", ")))
         }
     }
@@ -193,7 +200,13 @@ extension Editor {
 
     /// Rebuild playback so the change is heard.
     func musicChanged() {
-        if mode == .reel { reloadPlayer(at: time) }
+        guard mode == .reel else { return }
+        if reel.isEmpty && music.isEmpty {
+            mode = .source
+            reloadPlayer(at: currentMedia?.lastTime ?? 0)
+        } else {
+            reloadPlayer(at: time)
+        }
     }
 }
 
@@ -211,10 +224,9 @@ struct MusicPanel: View {
             sectionTitle(L("サウンドリール"), trailing: editor.music.isEmpty ? "" : L("%ld 曲", editor.music.count))
             Button(L("＋ 音楽を読み込む…")) { editor.openMusicPanel() }
                 .buttonStyle(FilmButtonStyle(compact: true))
-                .disabled(editor.reel.isEmpty)
                 .padding(.horizontal, 14).padding(.bottom, 6)
-            if editor.reel.isEmpty {
-                hint(L("リールにカットを継ぐと、その横のサウンドリールに音楽を置けます。"))
+            if editor.reel.isEmpty && editor.music.isEmpty {
+                hint(L("音楽を先に置いて、それに合わせて絵を継ぐこともできます。"))
             } else if editor.music.isEmpty {
                 hint(L("音楽ファイルをドロップするか読み込むと、ゲートの位置に置かれます。サウンドリールの上でドラッグすると絵に対して前後にずらせます。"))
             }

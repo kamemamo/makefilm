@@ -33,6 +33,10 @@ final class Editor {
     var musicSources: [AudioSource] = []
     var music: [MusicClip] = []
     var selectedMusicID: UUID?
+    /// Play the sound while cranking the film by hand (View menu). Saved per user.
+    var scrubAudio: Bool = UserDefaults.standard.object(forKey: "scrubAudio") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(scrubAudio, forKey: "scrubAudio"); if !scrubAudio { engine.endCrank() } }
+    }
     /// Cuts copied with ⌘C (kept for the session).
     var cutClipboard: [Segment] = []
 
@@ -142,14 +146,17 @@ final class Editor {
             guard let m = currentMedia else {
                 engine.setItem(nil, duration: 0, fps: 24, at: 0); return
             }
-            engine.setItem(AVPlayerItem(asset: m.asset), duration: m.duration, fps: m.fps, at: t)
+            let item = AVPlayerItem(asset: m.asset)
+            item.audioTimePitchAlgorithm = .varispeed      // pitch follows speed, like a Moviola
+            engine.setItem(item, duration: m.duration, fps: m.fps, at: t)
         case .reel:
-            guard let c = ReelComposition.build(reel, clips: clipMap, music: music, sources: sourceMap) else {
+            guard let c = ReelComposition.build(reel, clips: clipMap, music: music, sources: sourceMap, extendToMusic: true) else {
                 engine.setItem(nil, duration: 0, fps: 24, at: 0); return
             }
             let item = AVPlayerItem(asset: c.composition)
             item.videoComposition = c.videoComposition
             item.audioMix = c.audioMix
+            item.audioTimePitchAlgorithm = .varispeed
             engine.setItem(item, duration: c.duration, fps: c.fps, at: t)
         }
         snap()
@@ -158,7 +165,7 @@ final class Editor {
 
     func setMode(_ m: EditMode) {
         guard m != mode else { return }
-        if m == .reel && reel.isEmpty { toast(L("リールはまだ空です")); return }
+        if m == .reel && reel.isEmpty && music.isEmpty { toast(L("リールはまだ空です")); return }
         if m == .source && currentMedia == nil { return }
         rememberPosition()
         mode = m
@@ -226,7 +233,7 @@ final class Editor {
     func scrub(by delta: Double) {
         lastCrankAt = CACurrentMediaTime()
         if speed != 0 { stop() }
-        engine.scrub(to: time + delta)
+        if scrubAudio { engine.crank(to: time + delta) } else { engine.scrub(to: time + delta) }
     }
 
     func endDrag(fling v: Double?) {
@@ -251,9 +258,14 @@ final class Editor {
                 snap()
             }
         } else if fling != 0 && !dragging {
-            engine.scrub(to: time + fling * dt)
+            if scrubAudio { lastCrankAt = now; engine.crank(to: time + fling * dt) } else { engine.scrub(to: time + fling * dt) }
             fling *= pow(0.9, dt * 60)
             if abs(fling) < 0.02 || time <= 0 || time >= engine.duration - 0.001 { fling = 0; snap() }
+        }
+        // the hand stopped (no drag / scroll for a moment): settle on the frame
+        if engine.cranking {
+            engine.crankTick(dt: dt, idle: !dragging && fling == 0 && now - lastCrankAt > 0.15)
+            if !engine.cranking { snap() }
         }
 
         let idx = mode == .reel ? (locate(time, in: reel)?.index ?? -1) : -1
@@ -397,7 +409,7 @@ final class Editor {
 
     private func reelChanged(keepingTime t: Double) {
         if mode == .reel {
-            if reel.isEmpty {
+            if reel.isEmpty && music.isEmpty {
                 mode = .source
                 reloadPlayer(at: currentMedia?.lastTime ?? 0)
             } else {

@@ -30,7 +30,6 @@ struct MakeFilmApp: App {
                 Divider()
                 Button(L("素材を読み込む…")) { editor.openPanel() }.keyboardShortcut("i")
                 Button(L("音楽を読み込む…")) { editor.openMusicPanel() }.keyboardShortcut("i", modifiers: [.command, .shift])
-                    .disabled(editor.reel.isEmpty)
                 Button(L("書き出し…")) { editor.openExport() }
                     .keyboardShortcut("e")
                     .disabled(!editor.canExport)
@@ -38,6 +37,9 @@ struct MakeFilmApp: App {
             CommandGroup(replacing: .saveItem) {
                 Button(L("保存")) { editor.saveProject() }.keyboardShortcut("s")
                 Button(L("別名で保存…")) { editor.saveProjectAs() }.keyboardShortcut("s", modifiers: [.command, .shift])
+            }
+            CommandGroup(after: .toolbar) {
+                Toggle(L("手回し中に音を出す"), isOn: Binding(get: { editor.scrubAudio }, set: { editor.scrubAudio = $0 }))
             }
             CommandGroup(replacing: .pasteboard) {
                 Button(L("カットをコピー")) { editor.copyCut() }.keyboardShortcut("c")

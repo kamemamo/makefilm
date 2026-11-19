@@ -141,7 +141,7 @@ extension Editor {
         selectedMusicID = nil
         undoStack = []; redoStack = []
         currentMediaID = file.currentMediaID.flatMap { ids.contains($0) ? $0 : nil } ?? loaded.first?.id
-        mode = (file.mode == "reel" && !reel.isEmpty) ? .reel : .source
+        mode = (file.mode == "reel" && (!reel.isEmpty || !music.isEmpty)) ? .reel : .source
         reelTime = file.reelTime
         projectURL = url
         reloadPlayer(at: mode == .reel ? reelTime : (currentMedia?.lastTime ?? 0))

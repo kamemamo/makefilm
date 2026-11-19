@@ -142,3 +142,5 @@
 "ゲートで終わりを切る" = "Trim tail at gate";
 "ゲートより後の部分を切り落とす" = "Cut away everything after the gate";
 "なし" = "None";
+"音楽を先に置いて、それに合わせて絵を継ぐこともできます。" = "You can lay the music first and cut the picture to it.";
+"手回し中に音を出す" = "Play Sound While Cranking";
