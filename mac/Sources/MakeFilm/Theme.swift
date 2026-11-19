@@ -56,3 +56,10 @@ enum AppVersion {
     static var build: String? { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String }
     static var full: String { "MakeFilm \(short ?? "dev") (\(build ?? "-"))" }
 }
+
+/// Localized UI text. Keys are the Japanese strings; `en.lproj/Localizable.strings` holds English.
+/// With arguments, the key is a printf-style format ("%@", "%ld", "%.1f").
+func L(_ key: String, _ args: CVarArg...) -> String {
+    let s = Bundle.main.localizedString(forKey: key, value: key, table: nil)
+    return args.isEmpty ? s : String(format: s, locale: Locale.current, arguments: args)
+}

@@ -88,7 +88,7 @@ final class Editor {
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
-        panel.message = "編集する動画を選んでください"
+        panel.message = L("編集する動画を選んでください")
         if panel.runModal() == .OK { importURLs(panel.urls) }
     }
 
@@ -103,7 +103,7 @@ final class Editor {
                     thumbs.register(m)
                     select(m.id)
                 } catch {
-                    toast("読み込めませんでした: \(url.lastPathComponent)")
+                    toast(L("読み込めませんでした: %@", url.lastPathComponent))
                 }
             }
         }
@@ -145,7 +145,7 @@ final class Editor {
 
     func setMode(_ m: EditMode) {
         guard m != mode else { return }
-        if m == .reel && reel.isEmpty { toast("リールはまだ空です"); return }
+        if m == .reel && reel.isEmpty { toast(L("リールはまだ空です")); return }
         if m == .source && currentMedia == nil { return }
         rememberPosition()
         mode = m
@@ -268,12 +268,12 @@ final class Editor {
         guard mode == .source, let i = currentIndex else { return }
         let m = media[i]
         let a = m.markIn ?? 0, b = m.markOut ?? m.duration
-        guard b - a >= 1 / m.fps * 0.99 else { toast("IN と OUT の間が短すぎます"); return }
+        guard b - a >= 1 / m.fps * 0.99 else { toast(L("IN と OUT の間が短すぎます")); return }
         pushUndo()
         reel.append(Segment(mediaID: m.id, start: a, end: b))
         media[i].markIn = nil
         media[i].markOut = nil
-        toast(String(format: "リールに継ぎました（#%d・%.1f秒）", reel.count, b - a))
+        toast(L("リールに継ぎました（#%ld・%.1f秒）", reel.count, b - a))
     }
 
     func cutAtGate() {
@@ -283,14 +283,14 @@ final class Editor {
         let fd = 1 / m.fps
         let at = (l.src * m.fps + 1e-6).rounded(.down) / m.fps   // cut just before the frame in the gate
         guard at - l.segment.start >= fd * 0.99, l.segment.end - at >= fd * 0.99 else {
-            toast("カットの端に近すぎます"); return
+            toast(L("カットの端に近すぎます")); return
         }
         pushUndo()
         var a = l.segment; a.id = UUID(); a.end = at
         var b = l.segment; b.id = UUID(); b.start = at
         reel.replaceSubrange(l.index...l.index, with: [a, b])
         reelChanged(keepingTime: time)
-        toast("ゲート位置で切りました")
+        toast(L("ゲート位置で切りました"))
     }
 
     func liftAtGate() {
@@ -306,7 +306,7 @@ final class Editor {
         pushUndo()
         reel.remove(at: index)
         reelChanged(keepingTime: start)
-        toast("#\(index + 1) を外しました")
+        toast(L("#%ld を外しました", index + 1))
     }
 
     /// Move a segment so it sits before `targetID` (or at the end when nil).
@@ -351,7 +351,7 @@ final class Editor {
         redoStack.append(reel)
         reel = prev
         reelChanged(keepingTime: time)
-        toast("取り消し")
+        toast(L("取り消し"))
     }
 
     func redo() {
@@ -359,7 +359,7 @@ final class Editor {
         undoStack.append(reel)
         reel = next
         reelChanged(keepingTime: time)
-        toast("やり直し")
+        toast(L("やり直し"))
     }
 
     // MARK: export (see Export.swift)

@@ -2,13 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>MakeFilm</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>MakeFilm プロジェクト</string>
+			<string>MakeFilm Project</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
@@ -20,7 +22,7 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>動画</string>
+			<string>Movie</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
@@ -37,6 +39,11 @@
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>local.makefilm.app</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ja</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>MakeFilm</string>
 	<key>CFBundlePackageType</key>
@@ -62,7 +69,7 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>MakeFilm プロジェクト</string>
+			<string>MakeFilm Project</string>
 			<key>UTTypeIdentifier</key>
 			<string>local.makefilm.project</string>
 			<key>UTTypeTagSpecification</key>

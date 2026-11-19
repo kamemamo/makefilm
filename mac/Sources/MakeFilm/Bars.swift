@@ -48,31 +48,31 @@ struct HeaderBar: View {
             }
             .padding(.trailing, 8)
             HStack(spacing: 0) {
-                Button { editor.setMode(.source) } label: { HStack(spacing: 4) { Text("素材"); Kbd("1") } }
+                Button { editor.setMode(.source) } label: { HStack(spacing: 4) { Text(L("素材")); Kbd("1") } }
                     .buttonStyle(FilmButtonStyle(on: editor.mode == .source))
-                Button { editor.setMode(.reel) } label: { HStack(spacing: 4) { Text("リール"); Kbd("2") } }
+                Button { editor.setMode(.reel) } label: { HStack(spacing: 4) { Text(L("リール")); Kbd("2") } }
                     .buttonStyle(FilmButtonStyle(on: editor.mode == .reel))
             }
-            Button("＋ 素材を開く") { editor.openPanel() }.buttonStyle(FilmButtonStyle())
+            Button(L("＋ 素材を開く")) { editor.openPanel() }.buttonStyle(FilmButtonStyle())
             Spacer()
-            Text("流れ").foregroundStyle(Theme.muted)
+            Text(L("流れ")).foregroundStyle(Theme.muted)
             HStack(spacing: 0) {
-                Button("↑ 上へ") { editor.direction = -1 }
+                Button(L("↑ 上へ")) { editor.direction = -1 }
                     .buttonStyle(FilmButtonStyle(on: editor.direction == -1))
-                    .help("フィルムが下から上へ流れる（標準）")
-                Button("↓ 下へ") { editor.direction = 1 }
+                    .help(L("フィルムが下から上へ流れる（標準）"))
+                Button(L("↓ 下へ")) { editor.direction = 1 }
                     .buttonStyle(FilmButtonStyle(on: editor.direction == 1))
-                    .help("フィルムが上から下へ流れる（ムービオラ式）")
+                    .help(L("フィルムが上から下へ流れる（ムービオラ式）"))
             }
-            Text("コマ密度").foregroundStyle(Theme.muted)
+            Text(L("コマ密度")).foregroundStyle(Theme.muted)
             Picker("", selection: $editor.stripFPS) {
-                Text("6 /秒").tag(6); Text("12 /秒").tag(12); Text("24 /秒").tag(24)
+                Text(L("6 /秒")).tag(6); Text(L("12 /秒")).tag(12); Text(L("24 /秒")).tag(24)
             }
             .labelsHidden().frame(width: 90)
-            Button("書き出し…") { editor.openExport() }
+            Button(L("書き出し…")) { editor.openExport() }
                 .buttonStyle(FilmButtonStyle(primary: true))
                 .disabled(!editor.canExport)
-                .help("リール・素材の範囲・今のコマを、形式とサイズを選んで書き出す (⌘E)")
+                .help(L("リール・素材の範囲・今のコマを、形式とサイズを選んで書き出す (⌘E)"))
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .background(Theme.panel)
@@ -100,14 +100,14 @@ struct TransportBar: View {
             }
 
             HStack(spacing: 6) {
-                Button("◀︎|") { editor.step(-1) }.help("1フレーム戻す (←)")
-                Button(editor.speed == 0 ? "▶︎" : "❚❚") { editor.togglePlay() }.frame(minWidth: 50).help("再生/停止 (Space)")
-                Button("|▶︎") { editor.step(1) }.help("1フレーム送る (→)")
+                Button("◀︎|") { editor.step(-1) }.help(L("1フレーム戻す (←)"))
+                Button(editor.speed == 0 ? "▶︎" : "❚❚") { editor.togglePlay() }.frame(minWidth: 50).help(L("再生/停止 (Space)"))
+                Button("|▶︎") { editor.step(1) }.help(L("1フレーム送る (→)"))
             }
             .buttonStyle(FilmButtonStyle())
 
             HStack(spacing: 4) {
-                Text("ペダル").font(.system(size: 11)).foregroundStyle(Theme.muted).padding(.trailing, 2)
+                Text(L("ペダル")).font(.system(size: 11)).foregroundStyle(Theme.muted).padding(.trailing, 2)
                 ForEach(Editor.pedal, id: \.self) { s in
                     Button(label(s)) { editor.setSpeed(s) }
                         .buttonStyle(FilmButtonStyle(on: editor.speed == s))
@@ -119,7 +119,7 @@ struct TransportBar: View {
                 HStack(spacing: 6) {
                     Button { editor.markIn() } label: { HStack(spacing: 4) { Text("IN"); Kbd("I") } }
                     Button { editor.markOut() } label: { HStack(spacing: 4) { Text("OUT"); Kbd("O") } }
-                    Button { editor.splice() } label: { HStack(spacing: 4) { Text("スプライス"); Kbd("⏎") } }
+                    Button { editor.splice() } label: { HStack(spacing: 4) { Text(L("スプライス")); Kbd("⏎") } }
                         .buttonStyle(FilmButtonStyle(primary: true))
                     if let m = editor.currentMedia {
                         Text("IN \(m.markIn.map { TC.string($0, fps: m.fps) } ?? "--")  OUT \(m.markOut.map { TC.string($0, fps: m.fps) } ?? "--")")
@@ -129,17 +129,17 @@ struct TransportBar: View {
                 .buttonStyle(FilmButtonStyle())
             } else {
                 HStack(spacing: 6) {
-                    Button { editor.cutAtGate() } label: { HStack(spacing: 4) { Text("切る"); Kbd("C") } }
-                        .help("ゲート位置でフィルムを切る")
-                    Button { editor.liftAtGate() } label: { HStack(spacing: 4) { Text("外す"); Kbd("X") } }
-                        .help("ゲート位置のカットをリールから外す")
-                    Button { editor.undo() } label: { HStack(spacing: 4) { Text("取り消し"); Kbd("⌘Z") } }
+                    Button { editor.cutAtGate() } label: { HStack(spacing: 4) { Text(L("切る")); Kbd("C") } }
+                        .help(L("ゲート位置でフィルムを切る"))
+                    Button { editor.liftAtGate() } label: { HStack(spacing: 4) { Text(L("外す")); Kbd("X") } }
+                        .help(L("ゲート位置のカットをリールから外す"))
+                    Button { editor.undo() } label: { HStack(spacing: 4) { Text(L("取り消し")); Kbd("⌘Z") } }
                         .disabled(editor.undoStack.isEmpty)
                 }
                 .buttonStyle(FilmButtonStyle())
             }
             Spacer()
-            Text("J/K/L 速度 · ↑↓ フィルム送り · ドラッグ/スクロールで手回し")
+            Text(L("J/K/L 速度 · ↑↓ フィルム送り · ドラッグ/スクロールで手回し"))
                 .font(.system(size: 11)).foregroundStyle(Theme.muted)
                 .lineLimit(1)
                 .layoutPriority(-1)

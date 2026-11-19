@@ -15,32 +15,32 @@ struct MakeFilmApp: App {
         .defaultSize(width: 1360, height: 920)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("新規プロジェクト") { editor.newProject() }.keyboardShortcut("n")
-                Button("プロジェクトを開く…") { editor.openProjectPanel() }.keyboardShortcut("o")
-                Menu("最近使ったプロジェクト") {
+                Button(L("新規プロジェクト")) { editor.newProject() }.keyboardShortcut("n")
+                Button(L("プロジェクトを開く…")) { editor.openProjectPanel() }.keyboardShortcut("o")
+                Menu(L("最近使ったプロジェクト")) {
                     ForEach(editor.recentProjects, id: \.self) { url in
                         Button(url.deletingPathExtension().lastPathComponent) {
                             Task { await editor.openProject(url, confirmed: false) }
                         }
                     }
                     Divider()
-                    Button("履歴を消去") { editor.clearRecents() }
+                    Button(L("履歴を消去")) { editor.clearRecents() }
                 }
                 .disabled(editor.recentProjects.isEmpty)
                 Divider()
-                Button("素材を読み込む…") { editor.openPanel() }.keyboardShortcut("i")
-                Button("書き出し…") { editor.openExport() }
+                Button(L("素材を読み込む…")) { editor.openPanel() }.keyboardShortcut("i")
+                Button(L("書き出し…")) { editor.openExport() }
                     .keyboardShortcut("e")
                     .disabled(!editor.canExport)
             }
             CommandGroup(replacing: .saveItem) {
-                Button("保存") { editor.saveProject() }.keyboardShortcut("s")
-                Button("別名で保存…") { editor.saveProjectAs() }.keyboardShortcut("s", modifiers: [.command, .shift])
+                Button(L("保存")) { editor.saveProject() }.keyboardShortcut("s")
+                Button(L("別名で保存…")) { editor.saveProjectAs() }.keyboardShortcut("s", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .undoRedo) {
-                Button("取り消し") { editor.undo() }.keyboardShortcut("z")
+                Button(L("取り消し")) { editor.undo() }.keyboardShortcut("z")
                     .disabled(editor.undoStack.isEmpty)
-                Button("やり直し") { editor.redo() }.keyboardShortcut("z", modifiers: [.command, .shift])
+                Button(L("やり直し")) { editor.redo() }.keyboardShortcut("z", modifiers: [.command, .shift])
                     .disabled(editor.redoStack.isEmpty)
             }
         }
@@ -114,7 +114,7 @@ struct ContentView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                     .background(Color.black.opacity(0.35))
-                    .overlay(Text("ドロップして開く（動画は素材に、.makefilm はプロジェクトとして）").foregroundStyle(Theme.accent))
+                    .overlay(Text(L("ドロップして開く（動画は素材に、.makefilm はプロジェクトとして）")).foregroundStyle(Theme.accent))
                     .padding(12)
                     .allowsHitTesting(false)
             }
@@ -124,12 +124,12 @@ struct ContentView: View {
                 ZStack {
                     Color.black.opacity(0.6)
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("書き出し中…").fontWeight(.semibold)
+                        Text(L("書き出し中…")).fontWeight(.semibold)
                         ProgressView(value: p).tint(Theme.accent)
                         HStack {
                             Text("\(Int(p * 100))%").font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.muted)
                             Spacer()
-                            Button("中止") { editor.cancelExport() }.buttonStyle(FilmButtonStyle())
+                            Button(L("中止")) { editor.cancelExport() }.buttonStyle(FilmButtonStyle())
                         }
                     }
                     .padding(20)

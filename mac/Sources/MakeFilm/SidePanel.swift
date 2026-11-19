@@ -39,8 +39,8 @@ struct TrimBinView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionTitle("トリムビン（リール順）",
-                         trailing: editor.reel.isEmpty ? "" : "\(editor.reel.count) カット · " + TC.string(editor.reelDuration, fps: 24))
+            sectionTitle(L("トリムビン（リール順）"),
+                         trailing: editor.reel.isEmpty ? "" : L("%ld カット", editor.reel.count) + " · " + TC.string(editor.reelDuration, fps: 24))
                 .padding(.top, -4)
             // the rack the clips hang from
             RoundedRectangle(cornerRadius: 3)
@@ -49,7 +49,7 @@ struct TrimBinView: View {
                 .padding(.horizontal, 10)
 
             if editor.reel.isEmpty {
-                Text("素材で I・O を付けて Return（スプライス）すると、ここに吊るされます。ドラッグで並べ替え、ホイールで左右にスクロール。")
+                Text(L("素材で I・O を付けて Return（スプライス）すると、ここに吊るされます。ドラッグで並べ替え、ホイールで左右にスクロール。"))
                     .font(.system(size: 12)).foregroundStyle(Theme.muted)
                     .padding(14)
                 Spacer(minLength: 0)
@@ -90,7 +90,7 @@ struct MediaPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionTitle("素材", trailing: editor.media.isEmpty ? "" : "\(editor.media.count) 本")
+            sectionTitle(L("素材"), trailing: editor.media.isEmpty ? "" : L("%ld 本", editor.media.count))
             ScrollView {
                 VStack(spacing: 2) {
                     ForEach(editor.media) { m in mediaRow(m) }
@@ -170,7 +170,7 @@ struct ClipCard: View {
 
             Button("×") { editor.remove(at: index) }
                 .buttonStyle(FilmButtonStyle(compact: true))
-                .help("リールから外す")
+                .help(L("リールから外す"))
                 .padding(.top, 4)
         }
         .frame(width: 76)

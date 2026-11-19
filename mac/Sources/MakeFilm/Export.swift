@@ -18,27 +18,27 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .h264: return "H.264（MP4）"
-        case .hevc: return "HEVC / H.265（MOV）"
-        case .prores422: return "Apple ProRes 422（MOV）"
-        case .prores4444: return "Apple ProRes 4444（MOV）"
-        case .audio: return "音声のみ（AAC・M4A）"
-        case .still: return "静止画（PNG）"
-        case .fcpxml: return "Final Cut Pro（FCPXML）"
-        case .premiere: return "Premiere Pro（XML）"
+        case .h264: return L("H.264（MP4）")
+        case .hevc: return L("HEVC / H.265（MOV）")
+        case .prores422: return L("Apple ProRes 422（MOV）")
+        case .prores4444: return L("Apple ProRes 4444（MOV）")
+        case .audio: return L("音声のみ（AAC・M4A）")
+        case .still: return L("静止画（PNG）")
+        case .fcpxml: return L("Final Cut Pro（FCPXML）")
+        case .premiere: return L("Premiere Pro（XML）")
         }
     }
 
     var detail: String {
         switch self {
-        case .h264: return "どこでも再生できる共有向け。SNS・Web・送付に"
-        case .hevc: return "H.264 と同じ画質でファイルが小さい。新しめの機器向け"
-        case .prores422: return "画質劣化の少ない編集用。他の編集ソフトへ渡すときに"
-        case .prores4444: return "422 より色情報が多い最高画質のマスター用。ファイルは大きい"
-        case .audio: return "映像を捨てて音だけを書き出す"
-        case .still: return "ゲートにある今のコマを 1 枚の画像に"
-        case .fcpxml: return "カットの並びと IN/OUT をそのまま渡す。DaVinci Resolve でも読める"
-        case .premiere: return "Premiere Pro 用のタイムライン。DaVinci Resolve でも読める"
+        case .h264: return L("どこでも再生できる共有向け。SNS・Web・送付に")
+        case .hevc: return L("H.264 と同じ画質でファイルが小さい。新しめの機器向け")
+        case .prores422: return L("画質劣化の少ない編集用。他の編集ソフトへ渡すときに")
+        case .prores4444: return L("422 より色情報が多い最高画質のマスター用。ファイルは大きい")
+        case .audio: return L("映像を捨てて音だけを書き出す")
+        case .still: return L("ゲートにある今のコマを 1 枚の画像に")
+        case .fcpxml: return L("カットの並びと IN/OUT をそのまま渡す。DaVinci Resolve でも読める")
+        case .premiere: return L("Premiere Pro 用のタイムライン。DaVinci Resolve でも読める")
         }
     }
 
@@ -105,8 +105,8 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case .hevc: return "_HEVC"
         case .prores422: return "_ProRes422"
         case .prores4444: return "_ProRes4444"
-        case .audio: return "_音声"
-        case .still: return "_コマ"
+        case .audio: return L("_音声")
+        case .still: return L("_コマ")
         case .fcpxml: return "_FinalCut"
         case .premiere: return "_Premiere"
         }
@@ -118,7 +118,7 @@ enum ExportResolution: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .original: return "元のサイズ"
+        case .original: return L("元のサイズ")
         case .uhd: return "4K"
         case .fhd: return "1080p"
         case .hd: return "720p"
@@ -138,7 +138,7 @@ enum ExportResolution: String, CaseIterable, Identifiable, Codable {
 enum ExportTarget: String, CaseIterable, Identifiable, Codable {
     case reel, source
     var id: String { rawValue }
-    var title: String { self == .reel ? "リール全体" : "素材の IN〜OUT" }
+    var title: String { self == .reel ? L("リール全体") : L("素材の IN〜OUT") }
 }
 
 struct ExportOptions: Codable, Equatable {
@@ -190,14 +190,14 @@ extension Editor {
 
         let segs = exportSegments(o.target)
         guard !segs.isEmpty, let c = ReelComposition.build(segs, clips: clipMap) else {
-            toast("書き出すフィルムがありません"); return
+            toast(L("書き出すフィルムがありません")); return
         }
         if o.format == .audio && c.composition.tracks(withMediaType: .audio).isEmpty {
-            toast("音声トラックがありません"); return
+            toast(L("音声トラックがありません")); return
         }
         guard let session = AVAssetExportSession(asset: c.composition, presetName: o.format.preset(o.resolution)),
               session.supportedFileTypes.contains(o.format.fileType) else {
-            toast("この素材は \(o.format.title) で書き出せません"); return
+            toast(L("この素材は %@ で書き出せません", o.format.title)); return
         }
 
         let panel = NSSavePanel()
@@ -225,12 +225,12 @@ extension Editor {
             exportProgress = nil
             switch status {
             case .completed:
-                toast("書き出しました: \(url.lastPathComponent)")
+                toast(L("書き出しました: %@", url.lastPathComponent))
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             case .cancelled:
-                toast("書き出しを中止しました")
+                toast(L("書き出しを中止しました"))
             default:
-                toast("書き出しに失敗しました: \(session.error?.localizedDescription ?? "")")
+                toast(L("書き出しに失敗しました: %@", session.error?.localizedDescription ?? ""))
             }
         }
     }
@@ -240,7 +240,7 @@ extension Editor {
         if o.format == .still || o.target == .source, let m = currentMedia, mode == .source || o.target == .source {
             base = (m.name as NSString).deletingPathExtension
         } else {
-            base = "MakeFilm リール"
+            base = L("MakeFilm リール")
         }
         var name = base + o.format.nameSuffix
         if o.format == .still { name += "_" + TC.string(time, fps: engine.fps).replacingOccurrences(of: ":", with: "-") }
@@ -251,7 +251,7 @@ extension Editor {
     /// Write an FCPXML / Premiere XML that rebuilds the cut from the original files.
     func exportTimeline(_ o: ExportOptions) {
         let segs = exportSegments(o.target)
-        guard !segs.isEmpty else { toast("書き出すフィルムがありません"); return }
+        guard !segs.isEmpty else { toast(L("書き出すフィルムがありません")); return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [o.format.utType]
         panel.nameFieldStringValue = defaultExportName(o) + "." + o.format.ext
@@ -266,12 +266,12 @@ extension Editor {
                 ? TimelineExport.fcpxml(name: seqName, segments: segs, clips: clips)
                 : TimelineExport.xmeml(name: seqName, segments: segs, clips: clips)
             do {
-                guard let xml else { throw LoadError(message: "タイムラインを作れませんでした") }
+                guard let xml else { throw LoadError(message: L("タイムラインを作れませんでした")) }
                 try xml.write(to: url, atomically: true, encoding: .utf8)
-                toast("書き出しました: \(url.lastPathComponent)（\(segs.count) カット）")
+                toast(L("書き出しました: %@（%ld カット）", url.lastPathComponent, segs.count))
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
-                toast("書き出しに失敗しました: \(error.localizedDescription)")
+                toast(L("書き出しに失敗しました: %@", error.localizedDescription))
             }
         }
     }
@@ -296,21 +296,21 @@ extension Editor {
 
         Task {
             guard let img = try? await gen.image(at: cm(t)).image else {
-                toast("コマを取り出せませんでした"); return
+                toast(L("コマを取り出せませんでした")); return
             }
             let panel = NSSavePanel()
             panel.allowedContentTypes = [.png]
             panel.nameFieldStringValue = name
             guard panel.runModal() == .OK, let url = panel.url else { return }
             guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-                toast("保存できませんでした"); return
+                toast(L("保存できませんでした")); return
             }
             CGImageDestinationAddImage(dest, img, nil)
             if CGImageDestinationFinalize(dest) {
-                toast("書き出しました: \(url.lastPathComponent)（\(img.width)×\(img.height)）")
+                toast(L("書き出しました: %@（%ld×%ld）", url.lastPathComponent, img.width, img.height))
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } else {
-                toast("保存できませんでした")
+                toast(L("保存できませんでした"))
             }
         }
     }
@@ -325,13 +325,13 @@ struct ExportSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("書き出し").font(.system(size: 17, weight: .bold))
+            Text(L("書き出し")).font(.system(size: 17, weight: .bold))
 
             // what
             VStack(alignment: .leading, spacing: 8) {
-                label("書き出す範囲")
+                label(L("書き出す範囲"))
                 if o.format == .still {
-                    Text("ゲートにある今のコマ（\(TC.string(editor.time, fps: editor.engine.fps))）")
+                    Text(L("ゲートにある今のコマ（%@）", TC.string(editor.time, fps: editor.engine.fps)))
                         .foregroundStyle(Theme.muted)
                 } else {
                     HStack(spacing: 0) {
@@ -346,9 +346,9 @@ struct ExportSheet: View {
 
             // format
             VStack(alignment: .leading, spacing: 6) {
-                label("ファイルとして書き出す")
+                label(L("ファイルとして書き出す"))
                 ForEach(ExportFormat.mediaFormats) { f in formatRow(f) }
-                label("編集ソフトで続ける（元の素材を参照するタイムライン）")
+                label(L("編集ソフトで続ける（元の素材を参照するタイムライン）"))
                     .padding(.top, 8)
                 ForEach(ExportFormat.timelineFormats) { f in formatRow(f) }
             }
@@ -356,7 +356,7 @@ struct ExportSheet: View {
             // size
             if !o.format.resolutions.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    label("サイズ")
+                    label(L("サイズ"))
                     HStack(spacing: 0) {
                         ForEach(o.format.resolutions) { r in
                             Button(r.title) { editor.exportOptions.resolution = r }
@@ -372,10 +372,10 @@ struct ExportSheet: View {
 
             HStack {
                 Spacer()
-                Button("キャンセル") { editor.showExportSheet = false }
+                Button(L("キャンセル")) { editor.showExportSheet = false }
                     .buttonStyle(FilmButtonStyle())
                     .keyboardShortcut(.cancelAction)
-                Button("書き出す…") { editor.runExport() }
+                Button(L("書き出す…")) { editor.runExport() }
                     .buttonStyle(FilmButtonStyle(primary: true))
                     .keyboardShortcut(.defaultAction)
                     .disabled(!ready)
@@ -402,8 +402,8 @@ struct ExportSheet: View {
         }
         let segs = editor.exportSegments(o.target)
         let dur = segs.reduce(0) { $0 + $1.length }
-        var parts = [TC.string(dur, fps: 24), "\(segs.count) カット"]
-        if o.format.isTimeline { parts.append("素材を参照（再エンコードなし）") }
+        var parts = [TC.string(dur, fps: 24), L("%ld カット", segs.count)]
+        if o.format.isTimeline { parts.append(L("素材を参照（再エンコードなし）")) }
         if o.format.isMovie, let first = segs.first.flatMap({ editor.clip($0.mediaID) }) {
             var size = first.displaySize
             if let box = o.resolution.box, o.format.resolutions.contains(o.resolution) {

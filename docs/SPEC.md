@@ -26,6 +26,10 @@ MakeFilm は、**フィルムが縦に流れる**操作感で素材を見て、�
 | 依存 | なし（SwiftUI・AppKit・AVFoundation・Core Graphics・ImageIO のみ） |
 | 対応素材 | AVFoundation が読める動画（mp4 / mov / m4v など）。映像トラックが必須 |
 
+### 言語
+- 画面の文言は日本語と英語。macOS の言語設定に従い、日本語以外の環境では英語になる（開発言語 `en`、`CFBundleLocalizations` = en, ja）。
+- コード中の文言は日本語で書き、`L("…")` で引く。英語は `mac/Localization/en.lproj/Localizable.strings`。数を含む文言は `%ld` / `%@` の書式で渡し、英語は複数形を避けた表現（例 `Cuts: %ld`）にする。
+
 ## 3. 用語
 
 | 用語 | 意味 |
@@ -299,7 +303,8 @@ Editor（アプリ状態）
 | `Export.swift` | 書き出しの形式・画面・実行 |
 | `Project.swift` | プロジェクトの保存・読み込み・最近使った項目・編集済み判定 |
 | `TimelineExport.swift` | FCPXML / xmeml の生成、タイムコード読み取り |
-| `Theme.swift` | 色、タイムコード表示、バージョン取得 |
+| `Theme.swift` | 色、タイムコード表示、バージョン取得、文言の翻訳 `L()` |
+| `mac/Localization/` | 画面の文言。`en.lproj/Localizable.strings` に英語（キーは日本語の原文）、`ja.lproj` は日本語を有効にするための空ファイルと `InfoPlist.strings` |
 | `index.html` | 最初の Web 試作（単体で動く） |
 | `samples/sample.mp4` | 動作確認用のテスト映像（ffmpeg 生成） |
 

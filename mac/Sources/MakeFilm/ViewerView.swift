@@ -273,9 +273,9 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "film.stack").font(.system(size: 40)).foregroundStyle(Theme.muted)
-            Text("動画ファイルをここにドロップ").font(.system(size: 15, weight: .semibold))
-            Text("左のフィルムを上下にドラッグして手回し、スペースで再生").foregroundStyle(Theme.muted)
-            Button("素材を開く…") { editor.openPanel() }
+            Text(L("動画ファイルをここにドロップ")).font(.system(size: 15, weight: .semibold))
+            Text(L("左のフィルムを上下にドラッグして手回し、スペースで再生")).foregroundStyle(Theme.muted)
+            Button(L("素材を開く…")) { editor.openPanel() }
                 .buttonStyle(FilmButtonStyle(primary: true))
         }
     }

@@ -40,9 +40,9 @@ extension Editor {
 
     // MARK: state
 
-    var projectName: String { projectURL?.deletingPathExtension().lastPathComponent ?? "名称未設定" }
+    var projectName: String { projectURL?.deletingPathExtension().lastPathComponent ?? L("名称未設定") }
     var isDirty: Bool { core() != savedCore }
-    var windowTitle: String { projectName + (isDirty ? " — 編集済み" : "") }
+    var windowTitle: String { projectName + (isDirty ? L(" — 編集済み") : "") }
 
     func core() -> ProjectCore {
         ProjectCore(media: media.map { .init(id: $0.id, path: $0.url.standardizedFileURL.path, markIn: $0.markIn, markOut: $0.markOut) },
@@ -68,7 +68,7 @@ extension Editor {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.makefilmProject]
         panel.allowsMultipleSelection = false
-        panel.message = "開くプロジェクトを選んでください"
+        panel.message = L("開くプロジェクトを選んでください")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await openProject(url) }
     }
@@ -81,7 +81,7 @@ extension Editor {
         do {
             file = try JSONDecoder().decode(ProjectFile.self, from: Data(contentsOf: url))
         } catch {
-            toast("プロジェクトを開けませんでした: \(url.lastPathComponent)")
+            toast(L("プロジェクトを開けませんでした: %@", url.lastPathComponent))
             return
         }
         stop()
@@ -127,10 +127,10 @@ extension Editor {
         noteRecent(url)
 
         if !missing.isEmpty {
-            alert("見つからない素材があります",
-                  "次の素材は読み込めなかったため、プロジェクトから外しました（使っていたカットも外れます）。\n\n" + missing.joined(separator: "\n"))
+            alert(L("見つからない素材があります"),
+                  L("次の素材は読み込めなかったため、プロジェクトから外しました（使っていたカットも外れます）。") + "\n\n" + missing.joined(separator: "\n"))
         } else {
-            toast(relinked > 0 ? "開きました（素材の場所を \(relinked) 件更新）: \(projectName)" : "開きました: \(projectName)")
+            toast(relinked > 0 ? L("開きました（素材の場所を %ld 件更新）: %@", relinked, projectName) : L("開きました: %@", projectName))
         }
     }
 
@@ -146,7 +146,7 @@ extension Editor {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.makefilmProject]
         panel.nameFieldStringValue = projectName + ".makefilm"
-        panel.message = "プロジェクトの保存先を選んでください（素材ファイルはコピーされません）"
+        panel.message = L("プロジェクトの保存先を選んでください（素材ファイルはコピーされません）")
         guard panel.runModal() == .OK, let url = panel.url else { return false }
         guard write(to: url) else { return false }
         projectURL = url
@@ -171,12 +171,12 @@ extension Editor {
             enc.outputFormatting = [.prettyPrinted, .sortedKeys]
             try enc.encode(file).write(to: url, options: .atomic)
         } catch {
-            alert("保存できませんでした", error.localizedDescription)
+            alert(L("保存できませんでした"), error.localizedDescription)
             return false
         }
         savedCore = core()
         UserDefaults.standard.set(url.path, forKey: "lastProject")
-        toast("保存しました: \(url.lastPathComponent)")
+        toast(L("保存しました: %@", url.lastPathComponent))
         return true
     }
 
@@ -186,11 +186,11 @@ extension Editor {
     func confirmDiscardIfNeeded() -> Bool {
         guard isDirty else { return true }
         let a = NSAlert()
-        a.messageText = "「\(projectName)」への変更を保存しますか？"
-        a.informativeText = "保存しないと、リールや IN/OUT の変更は失われます。"
-        a.addButton(withTitle: "保存")
-        a.addButton(withTitle: "キャンセル")
-        a.addButton(withTitle: "保存しない")
+        a.messageText = L("「%@」への変更を保存しますか？", projectName)
+        a.informativeText = L("保存しないと、リールや IN/OUT の変更は失われます。")
+        a.addButton(withTitle: L("保存"))
+        a.addButton(withTitle: L("キャンセル"))
+        a.addButton(withTitle: L("保存しない"))
         switch a.runModal() {
         case .alertFirstButtonReturn: return saveProject()
         case .alertThirdButtonReturn: return true
@@ -200,7 +200,7 @@ extension Editor {
 
     private func locateMissing(name: String) -> URL? {
         let p = NSOpenPanel()
-        p.message = "素材「\(name)」が見つかりません。新しい場所を指定してください（キャンセルで外す）"
+        p.message = L("素材「%@」が見つかりません。新しい場所を指定してください（キャンセルで外す）", name)
         p.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
         p.allowsMultipleSelection = false
         return p.runModal() == .OK ? p.url : nil

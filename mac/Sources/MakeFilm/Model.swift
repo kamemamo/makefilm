@@ -31,7 +31,7 @@ struct MediaClip: Identifiable {
         let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         let duration = try await asset.load(.duration).seconds
         guard let video = try await asset.loadTracks(withMediaType: .video).first else {
-            throw LoadError(message: "映像トラックがありません")
+            throw LoadError(message: L("映像トラックがありません"))
         }
         let (size, transform, rate) = try await video.load(.naturalSize, .preferredTransform, .nominalFrameRate)
         let audio = try await asset.loadTracks(withMediaType: .audio).first
