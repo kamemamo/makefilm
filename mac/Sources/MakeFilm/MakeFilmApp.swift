@@ -16,9 +16,9 @@ struct MakeFilmApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("素材を開く…") { editor.openPanel() }.keyboardShortcut("o")
-                Button("リールを書き出し…") { editor.exportReel() }
+                Button("書き出し…") { editor.openExport() }
                     .keyboardShortcut("e")
-                    .disabled(editor.reel.isEmpty)
+                    .disabled(!editor.canExport)
             }
             CommandGroup(replacing: .undoRedo) {
                 Button("取り消し") { editor.undo() }.keyboardShortcut("z")
@@ -94,7 +94,7 @@ struct ContentView: View {
                 ZStack {
                     Color.black.opacity(0.6)
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("リールを書き出し中…").fontWeight(.semibold)
+                        Text("書き出し中…").fontWeight(.semibold)
                         ProgressView(value: p).tint(Theme.accent)
                         HStack {
                             Text("\(Int(p * 100))%").font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.muted)
@@ -109,6 +109,9 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: editor.toastMessage)
+        .sheet(isPresented: Binding(get: { editor.showExportSheet }, set: { editor.showExportSheet = $0 })) {
+            ExportSheet(editor: editor)
+        }
         .dropDestination(for: URL.self) { urls, _ in
             let videos = urls.filter { ["mp4", "mov", "m4v", "mkv", "webm", "avi", "mts"].contains($0.pathExtension.lowercased()) }
             editor.importURLs(videos)

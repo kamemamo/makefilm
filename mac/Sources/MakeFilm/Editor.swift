@@ -25,6 +25,8 @@ final class Editor {
     var thumbVersion = 0
     var toastMessage: String?
     var exportProgress: Double?
+    var showExportSheet = false
+    var exportOptions = ExportOptions.load()
     var undoStack: [[Segment]] = []
     var redoStack: [[Segment]] = []
 
@@ -37,7 +39,7 @@ final class Editor {
     @ObservationIgnored private var manualSpeed: Double = 0
     @ObservationIgnored private var reelTime: Double = 0
     @ObservationIgnored private var toastTask: Task<Void, Never>?
-    @ObservationIgnored private var exportSession: AVAssetExportSession?
+    @ObservationIgnored var exportSession: AVAssetExportSession?
 
     static let pedal: [Double] = [-4, -2, -1, 0, 0.5, 1, 2, 4]
 
@@ -224,7 +226,6 @@ final class Editor {
                 engine.adoptPlayerTime()
                 speed = 0
                 snap()
-                if exportProgress != nil { /* export runs separately */ }
             }
         } else if fling != 0 && !dragging {
             engine.scrub(to: time + fling * dt)
@@ -352,50 +353,7 @@ final class Editor {
         toast("やり直し")
     }
 
-    // MARK: export
-
-    func exportReel() {
-        guard !reel.isEmpty, exportProgress == nil,
-              let c = ReelComposition.build(reel, clips: clipMap) else { return }
-        stop()
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.quickTimeMovie]
-        panel.nameFieldStringValue = "MakeFilm リール.mov"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        try? FileManager.default.removeItem(at: url)
-
-        guard let session = AVAssetExportSession(asset: c.composition,
-                                                 presetName: AVAssetExportPresetHighestQuality) else {
-            toast("書き出しを開始できませんでした"); return
-        }
-        session.videoComposition = c.videoComposition
-        session.outputURL = url
-        session.outputFileType = .mov
-        exportSession = session
-        exportProgress = 0
-
-        Task {
-            while let s = exportSession, s.status == .waiting || s.status == .exporting || s.status == .unknown {
-                exportProgress = Double(s.progress)
-                try? await Task.sleep(for: .milliseconds(100))
-            }
-        }
-        Task {
-            await session.export()
-            let status = session.status
-            exportSession = nil
-            exportProgress = nil
-            switch status {
-            case .completed:
-                toast("書き出しました: \(url.lastPathComponent)")
-                NSWorkspace.shared.activateFileViewerSelecting([url])
-            case .cancelled:
-                toast("書き出しを中止しました")
-            default:
-                toast("書き出しに失敗しました: \(session.error?.localizedDescription ?? "")")
-            }
-        }
-    }
+    // MARK: export (see Export.swift)
 
     func cancelExport() { exportSession?.cancelExport() }
 
@@ -412,7 +370,7 @@ final class Editor {
 
     /// Returns true when the key was handled.
     func handleKey(_ e: NSEvent) -> Bool {
-        if exportProgress != nil { return false }
+        if exportProgress != nil || showExportSheet { return false }
         let mods = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if mods.contains(.command) || mods.contains(.control) || mods.contains(.option) { return false }
         let shift = mods.contains(.shift)

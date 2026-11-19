@@ -62,9 +62,10 @@ struct HeaderBar: View {
                 Text("6 /秒").tag(6); Text("12 /秒").tag(12); Text("24 /秒").tag(24)
             }
             .labelsHidden().frame(width: 90)
-            Button("リールを書き出し…") { editor.exportReel() }
+            Button("書き出し…") { editor.openExport() }
                 .buttonStyle(FilmButtonStyle(primary: true))
-                .disabled(editor.reel.isEmpty)
+                .disabled(!editor.canExport)
+                .help("リール・素材の範囲・今のコマを、形式とサイズを選んで書き出す (⌘E)")
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .background(Theme.panel)
