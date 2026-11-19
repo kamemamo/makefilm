@@ -50,6 +50,8 @@ struct ViewerView: View {
                     RadialGradient(colors: [.clear, .black.opacity(0.55)], center: .center,
                                    startRadius: 120, endRadius: 520)
                         .allowsHitTesting(false)
+                    // scroll over the picture to crank the film
+                    ScrubOverlay(editor: editor)
                 }
                 .aspectRatio(editor.aspect, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -63,6 +65,59 @@ struct ViewerView: View {
                 .padding(36)
             }
         }
+    }
+}
+
+/// Transparent layer over the viewer that turns scrolling into frame-accurate scrubbing.
+/// Vertical scroll moves the film the same way as on the strip; a sideways swipe works like a timeline.
+struct ScrubOverlay: NSViewRepresentable {
+    let editor: Editor
+    func makeNSView(context: Context) -> ScrubNSView {
+        let v = ScrubNSView(); v.editor = editor; return v
+    }
+    func updateNSView(_ nsView: ScrubNSView, context: Context) { nsView.editor = editor }
+}
+
+final class ScrubNSView: NSView {
+    weak var editor: Editor?
+    private var pending: CGFloat = 0
+    private var snapWork: DispatchWorkItem?
+    /// Trackpad points of travel per video frame.
+    private let pointsPerFrame: CGFloat = 6
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .resizeUpDown) }
+
+    override func scrollWheel(with e: NSEvent) {
+        let dir = CGFloat(MainActor.assumeIsolated { editor?.direction ?? 1 })
+        // Dominant axis: vertical follows the film direction, horizontal reads like a timeline.
+        let delta = abs(e.scrollingDeltaY) >= abs(e.scrollingDeltaX)
+            ? dir * e.scrollingDeltaY
+            : -e.scrollingDeltaX
+
+        if !e.hasPreciseScrollingDeltas {
+            // Mouse wheel: one notch = one frame.
+            let n = delta > 0 ? 1 : (delta < 0 ? -1 : 0)
+            if n != 0 { MainActor.assumeIsolated { editor?.step(n) } }
+            return
+        }
+
+        pending += delta
+        let frames = (pending / pointsPerFrame).rounded(.towardZero)
+        if frames != 0 {
+            pending -= frames * pointsPerFrame
+            MainActor.assumeIsolated {
+                guard let ed = editor else { return }
+                ed.fling = 0
+                ed.scrub(by: Double(frames) / ed.engine.fps)
+            }
+        }
+        snapWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in
+            self?.pending = 0
+            MainActor.assumeIsolated { self?.editor?.snap() }
+        }
+        snapWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: w)
     }
 }
 
