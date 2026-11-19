@@ -54,21 +54,17 @@ struct ContentView: View {
                     .frame(maxHeight: .infinity)
                     .clipped()
                 Divider().overlay(Theme.line)
-                VStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        ViewerView(editor: editor)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        Divider().overlay(Theme.line)
-                        MediaPanel(editor: editor)
-                            .frame(width: 260)
-                    }
-                    Divider().overlay(Theme.line)
-                    TrimBinView(editor: editor)
-                        .frame(height: 260)
-                }
+                ViewerView(editor: editor)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Divider().overlay(Theme.line)
+                MediaPanel(editor: editor)
+                    .frame(width: 260)
             }
             Divider().overlay(Theme.line)
             TransportBar(editor: editor)
+            Divider().overlay(Theme.line)
+            TrimBinView(editor: editor)
+                .frame(height: 260)
         }
         .foregroundStyle(Theme.text)
         .background(Theme.bg)
@@ -78,7 +74,7 @@ struct ContentView: View {
                     .padding(.horizontal, 14).padding(.vertical, 8)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: 0x0C0E0C)))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.line))
-                    .padding(.bottom, 86)
+                    .padding(.bottom, 340)   // just above the transport bar
                     .transition(.opacity)
                     .allowsHitTesting(false)
             }

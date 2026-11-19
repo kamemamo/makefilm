@@ -46,12 +46,13 @@ final class SidewaysScrollView: NSScrollView {
         fitDocument()
     }
 
-    /// Document is as tall as the visible area and as wide as its SwiftUI content wants.
+    /// Document is as tall as the visible area and exactly as wide as its SwiftUI content,
+    /// so short rows stay pinned to the left edge instead of being centered.
     func fitDocument() {
         guard let doc = documentView, let host else { return }
         let h = contentSize.height
         let ideal = host.sizeThatFits(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: h))
-        let size = CGSize(width: max(ideal.width, contentSize.width), height: h)
+        let size = CGSize(width: ceil(ideal.width), height: h)
         if doc.frame.size != size { doc.setFrameSize(size) }
     }
 
