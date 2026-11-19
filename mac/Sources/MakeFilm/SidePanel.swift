@@ -51,20 +51,28 @@ struct SidePanel: View {
                     .padding(14)
                 Spacer()
             } else {
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: 10) {
-                        ForEach(Array(editor.reel.enumerated()), id: \.element.id) { i, seg in
-                            ClipCard(editor: editor, index: i, segment: seg)
-                        }
-                        Color.clear.frame(width: 40, height: 200)
-                            .dropDestination(for: String.self) { items, _ in
-                                guard let s = items.first, let id = UUID(uuidString: s) else { return false }
-                                editor.move(id, before: nil); return true
+                GeometryReader { geo in
+                    // Clips hang at lengths proportional to their running time.
+                    // The longest one fills the bin's height; every clip shows at least one frame.
+                    let filmMax = max(ClipCard.minFilm, geo.size.height - ClipCard.chrome)
+                    let longest = max(editor.reel.map(\.length).max() ?? 1, 0.001)
+                    let pxPerSec = filmMax / longest
+                    ScrollView(.horizontal) {
+                        HStack(alignment: .top, spacing: 10) {
+                            ForEach(Array(editor.reel.enumerated()), id: \.element.id) { i, seg in
+                                ClipCard(editor: editor, index: i, segment: seg,
+                                         filmHeight: max(ClipCard.minFilm, seg.length * pxPerSec))
                             }
+                            Color.clear.frame(width: 40, height: filmMax)
+                                .dropDestination(for: String.self) { items, _ in
+                                    guard let s = items.first, let id = UUID(uuidString: s) else { return false }
+                                    editor.move(id, before: nil); return true
+                                }
+                        }
+                        .padding(.horizontal, 10)
+                        .animation(.easeOut(duration: 0.25), value: editor.reel)
                     }
-                    .padding(.horizontal, 10)
                 }
-                Spacer(minLength: 0)
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
@@ -105,19 +113,34 @@ struct ClipCard: View {
     let editor: Editor
     let index: Int
     let segment: Segment
+    /// Height of the hanging film, proportional to the clip's length.
+    let filmHeight: CGFloat
     @State private var targeted = false
+
+    static let frameH: CGFloat = 33, frameGap: CGFloat = 4, filmPad: CGFloat = 5
+    static let minFilm: CGFloat = frameH + filmPad * 2
+    /// Pin + label + button below the film.
+    static let chrome: CGFloat = 14 + 40 + 26 + 12
+
+    /// As many frames as fit in the strip, sampled evenly across the clip.
+    private var frameTimes: [Double] {
+        let n = max(1, Int((filmHeight - Self.filmPad * 2 + Self.frameGap) / (Self.frameH + Self.frameGap)))
+        return (0..<n).map { segment.start + (Double($0) + 0.5) / Double(n) * segment.length }
+    }
 
     var body: some View {
         let on = editor.mode == .reel && editor.activeSegmentIndex == index
         VStack(spacing: 0) {
             UnevenRoundedRectangle(topLeadingRadius: 2, bottomLeadingRadius: 5, bottomTrailingRadius: 5, topTrailingRadius: 2)
                 .fill(Color(hex: 0x9AA395)).frame(width: 10, height: 14).zIndex(1)
-            VStack(spacing: 4) {
-                ForEach([segment.start, (segment.start + segment.end) / 2, segment.end - 0.04], id: \.self) { t in
+            VStack(spacing: Self.frameGap) {
+                ForEach(frameTimes, id: \.self) { t in
                     ThumbView(editor: editor, mediaID: segment.mediaID, time: t)
                 }
             }
-            .padding(.vertical, 5).padding(.horizontal, 9)
+            .padding(.vertical, Self.filmPad).padding(.horizontal, 9)
+            .frame(height: filmHeight, alignment: .top)
+            .clipped()
             .background(FilmEdge())
             .overlay(RoundedRectangle(cornerRadius: 2).stroke(on ? Theme.accent : .clear, lineWidth: 2).padding(-2))
             .overlay(alignment: .leading) {
