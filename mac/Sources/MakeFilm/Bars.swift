@@ -51,11 +51,12 @@ struct HeaderBar: View {
             Spacer()
             Text("流れ").foregroundStyle(Theme.muted)
             HStack(spacing: 0) {
+                Button("↑ 上へ") { editor.direction = -1 }
+                    .buttonStyle(FilmButtonStyle(on: editor.direction == -1))
+                    .help("フィルムが下から上へ流れる（標準）")
                 Button("↓ 下へ") { editor.direction = 1 }
                     .buttonStyle(FilmButtonStyle(on: editor.direction == 1))
                     .help("フィルムが上から下へ流れる（ムービオラ式）")
-                Button("↑ 上へ") { editor.direction = -1 }
-                    .buttonStyle(FilmButtonStyle(on: editor.direction == -1))
             }
             Text("コマ密度").foregroundStyle(Theme.muted)
             Picker("", selection: $editor.stripFPS) {

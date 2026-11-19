@@ -12,8 +12,8 @@ final class Editor {
     var mode: EditMode = .source
     var currentMediaID: UUID?
     var speed: Double = 0
-    /// 1 = film flows downward (Moviola), -1 = upward.
-    var direction: Int = 1
+    /// -1 = film flows upward (default), 1 = downward (Moviola).
+    var direction: Int = -1
     var stripFPS: Int = 12 {
         didSet {
             thumbs.fps = stripFPS
