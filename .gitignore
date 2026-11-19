@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Swift Package Manager / build output
+mac/.build/
+mac/build/
+mac/.swiftpm/
+*.xcuserstate
+xcuserdata/
+
+# exported reels
+*.mov
+*.webm

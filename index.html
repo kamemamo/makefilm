@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MakeFilm</title>
+<style>
+:root{
+  --bg:#171b18; --panel:#20261f; --panel2:#2a3129; --line:#38423a;
+  --text:#e8e4d6; --muted:#98a092; --accent:#e3a548; --accent-ink:#1d1406;
+  --grease:#f6eeb4; --red:#e06a52; --film:#2b1a0d; --leader:#3d2b18; --hole:#0f110f;
+  --mono:"SF Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:13px/1.4 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif}
+body{display:grid;grid-template-rows:auto 1fr auto;height:100vh;overflow:hidden;user-select:none}
+button,select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;
+  padding:6px 10px;font:inherit;cursor:pointer}
+button:hover:not(:disabled),select:hover{border-color:var(--muted)}
+button:disabled{opacity:.35;cursor:default}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+kbd{font:11px var(--mono);color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:0 4px;margin-left:4px}
+
+header{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{font-weight:800;letter-spacing:.25em;margin-right:8px}
+.brand span{color:var(--accent)}
+.seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:transparent}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.spacer{flex:1}
+label.opt{display:flex;align-items:center;gap:6px;color:var(--muted)}
+
+main{display:grid;grid-template-columns:260px 1fr 330px;min-height:0}
+@media (max-width:1000px){ main{grid-template-columns:230px 1fr 250px} header{flex-wrap:wrap} }
+#stripWrap{position:relative;background:var(--hole);border-right:1px solid var(--line);min-height:0}
+#strip{position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none}
+#strip.grabbing{cursor:grabbing}
+
+#viewerWrap{position:relative;display:flex;align-items:center;justify-content:center;padding:28px;min-width:0;min-height:0;
+  background:radial-gradient(ellipse at center,#232a23 0%,var(--bg) 70%)}
+.hood{position:relative;padding:14px;border-radius:22px;background:linear-gradient(#2f372e,#1d231c);
+  box-shadow:0 18px 50px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06)}
+#viewer{display:block;border-radius:12px;background:#000}
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  color:var(--muted);text-align:center;pointer-events:none}
+#empty b{color:var(--text);font-size:15px}
+#empty button{pointer-events:auto}
+#dropHint{position:absolute;inset:12px;border:2px dashed var(--accent);border-radius:16px;display:none;
+  align-items:center;justify-content:center;font-size:16px;color:var(--accent);background:rgba(0,0,0,.4);z-index:5}
+body.dragover #dropHint{display:flex}
+
+aside{display:grid;grid-template-rows:auto auto auto 1fr;min-height:0;background:var(--panel);border-left:1px solid var(--line)}
+aside h2{margin:0;padding:10px 14px 6px;font-size:11px;letter-spacing:.15em;color:var(--muted);font-weight:600;
+  display:flex;justify-content:space-between}
+#mediaList{max-height:190px;overflow:auto;padding:0 8px 8px}
+.media{display:flex;gap:10px;align-items:center;padding:6px;border-radius:8px;cursor:pointer}
+.media:hover{background:var(--panel2)}
+.media.on{background:var(--panel2);outline:1px solid var(--accent)}
+.media canvas{width:64px;height:36px;border-radius:3px;background:#000;flex:none}
+.media .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.media .du{font:11px var(--mono);color:var(--muted)}
+#bin{position:relative;overflow:auto;padding:0 10px 14px;display:flex;gap:10px;align-items:flex-start;min-height:0}
+.rack{position:sticky;top:0;height:6px;margin:0 10px;border-radius:3px;background:linear-gradient(#6b7366,#3c433a)}
+.clip{flex:none;width:76px;display:flex;flex-direction:column;align-items:center;cursor:grab;padding-top:2px}
+.clip .pin{width:10px;height:14px;border-radius:2px 2px 5px 5px;background:#9aa395;margin-bottom:-2px;z-index:1}
+.clip .film{width:76px;background:var(--film);padding:5px 9px;border-radius:2px;display:flex;flex-direction:column;gap:4px;
+  background-image:repeating-linear-gradient(to bottom,transparent 0 4px,var(--hole) 4px 8px),
+                   repeating-linear-gradient(to bottom,transparent 0 4px,var(--hole) 4px 8px);
+  background-size:4px 100%,4px 100%;background-position:2px 0,calc(100% - 2px) 0;background-repeat:no-repeat}
+.clip canvas{width:58px;height:33px;display:block;background:#000}
+.clip .meta{font:10px var(--mono);color:var(--muted);text-align:center;margin-top:4px;line-height:1.3;width:100%}
+.clip .meta .n{color:var(--text);font-weight:600}
+.clip .x{margin-top:4px;padding:1px 7px;font-size:11px}
+.clip.on .film{outline:2px solid var(--accent);outline-offset:1px}
+.clip.dragging{opacity:.35}
+.clip.dropBefore .film{box-shadow:-6px 0 0 -2px var(--accent)}
+#binEmpty{color:var(--muted);padding:16px 14px;font-size:12px}
+
+footer{display:flex;align-items:center;gap:16px;padding:10px 14px;background:var(--panel);border-top:1px solid var(--line);flex-wrap:wrap}
+.counter{font:600 22px var(--mono);letter-spacing:.04em;min-width:150px}
+.feet{font:12px var(--mono);color:var(--muted)}
+.feet b{color:var(--accent);font-weight:600}
+.group{display:flex;align-items:center;gap:6px}
+.group .lbl{color:var(--muted);font-size:11px;letter-spacing:.1em;margin-right:2px}
+#pedal button{padding:6px 8px;font:12px var(--mono);min-width:38px}
+.marks{font:12px var(--mono);color:var(--grease)}
+#toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:#0c0e0c;border:1px solid var(--line);
+  padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+#toast.show{opacity:1}
+#exportOverlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;padding-bottom:110px;z-index:15}
+#exportOverlay.show{display:flex}
+#exportOverlay .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px;min-width:320px;display:flex;flex-direction:column;gap:10px}
+#exportOverlay .bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden}
+#exportOverlay .bar i{display:block;height:100%;width:0;background:var(--accent)}
+.help{color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">MAKE<span>FILM</span></div>
+  <div class="seg" id="modeSeg">
+    <button data-mode="source" class="on">素材 <kbd>1</kbd></button>
+    <button data-mode="reel">リール <kbd>2</kbd></button>
+  </div>
+  <button id="openBtn">＋ 素材を開く</button>
+  <input type="file" id="fileInput" accept="video/*" multiple hidden>
+  <div class="spacer"></div>
+  <label class="opt">流れ
+    <div class="seg" id="dirSeg">
+      <button data-dir="1" class="on" title="フィルムが上から下へ流れる（ムービオラ式）">↓ 下へ</button>
+      <button data-dir="-1" title="フィルムが下から上へ流れる">↑ 上へ</button>
+    </div>
+  </label>
+  <label class="opt">コマ密度
+    <select id="fpsSel"><option value="6">6 /秒</option><option value="12" selected>12 /秒</option><option value="24">24 /秒</option></select>
+  </label>
+  <button id="exportBtn" class="primary" disabled>リールを書き出し</button>
+</header>
+
+<main>
+  <div id="stripWrap"><canvas id="strip"></canvas></div>
+  <div id="viewerWrap">
+    <div class="hood"><canvas id="viewer" width="640" height="360"></canvas></div>
+    <div id="empty">
+      <b>動画ファイルをここにドロップ</b>
+      <div>左のフィルムを上下にドラッグして手回し、<kbd>Space</kbd> で再生</div>
+      <button id="openBtn2">素材を開く</button>
+    </div>
+    <div id="dropHint">ドロップして素材に追加</div>
+  </div>
+  <aside>
+    <h2><span>素材</span><span id="mediaCount"></span></h2>
+    <div id="mediaList"></div>
+    <h2><span>トリムビン（リール順）</span><span id="reelDur"></span></h2>
+    <div style="min-height:0;display:flex;flex-direction:column">
+      <div class="rack"></div>
+      <div id="bin"></div>
+      <div id="binEmpty">素材で <kbd>I</kbd> <kbd>O</kbd> を付けて <kbd>Enter</kbd>（スプライス）するとここに吊るされます。ドラッグで並べ替え。</div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <div>
+    <div class="counter" id="tc">00:00:00:00</div>
+    <div class="feet" id="feet">35mm <b>0+00</b> ft</div>
+  </div>
+  <div class="group">
+    <button id="prevBtn" title="1コマ戻す (←)">◀︎|</button>
+    <button id="playBtn" title="再生/停止 (Space)" style="min-width:56px">▶︎</button>
+    <button id="nextBtn" title="1コマ送る (→)">|▶︎</button>
+  </div>
+  <div class="group" id="pedal">
+    <span class="lbl">ペダル</span>
+  </div>
+  <div class="group" id="srcTools">
+    <button id="inBtn">IN <kbd>I</kbd></button>
+    <button id="outBtn">OUT <kbd>O</kbd></button>
+    <button id="spliceBtn" class="primary">スプライス <kbd>⏎</kbd></button>
+    <span class="marks" id="marks"></span>
+  </div>
+  <div class="group" id="reelTools" style="display:none">
+    <button id="cutBtn" title="ゲート位置でフィルムを切る">切る <kbd>C</kbd></button>
+    <button id="liftBtn" title="ゲート位置のカットを外す">外す <kbd>X</kbd></button>
+    <button id="undoBtn">取り消し <kbd>⌘Z</kbd></button>
+  </div>
+  <div class="spacer"></div>
+  <div class="help">J/K/L 速度 · ↑↓ フィルム送り · ホイール/ドラッグで手回し</div>
+</footer>
+
+<div id="toast"></div>
+<div id="exportOverlay"><div class="box">
+  <b>リールを書き出し中…（実時間で録画しています）</b>
+  <div class="bar"><i id="exportBar"></i></div>
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <span class="help" id="exportInfo"></span><button id="exportCancel">中止</button>
+  </div>
+</div></div>
+
+<script>
+'use strict';
+/* ============ state ============ */
+const THUMB_W = 144, MAX_THUMBS = 1400, TC_FPS = 24;
+let F = 12;              // strip frames per second
+let dir = 1;             // 1 = film flows downward (Moviola), -1 = upward
+let mode = 'source';
+const media = [];        // loaded clips
+let cur = null;          // current source media
+let reel = [];           // [{id, mediaId, in, out}]
+let reelT = 0;
+let t = 0;               // playhead in sequence time
+let speed = 0;           // transport speed (0 = stopped)
+let fling = 0, dragging = false;
+let exporting = null;
+const undoStack = [], redoStack = [];
+let uidN = 0; const uid = () => ++uidN;
+
+const $ = id => document.getElementById(id);
+const strip = $('strip'), sctx = strip.getContext('2d');
+const viewer = $('viewer'), vctx = viewer.getContext('2d');
+const mediaById = id => media.find(m => m.id === id);
+
+/* ============ sequence model ============ */
+function seq(){
+  if (mode === 'source') return cur ? [{id:0, mediaId:cur.id, in:0, out:cur.duration}] : [];
+  return reel;
+}
+function duration(){ return seq().reduce((a,s)=>a + (s.out - s.in), 0); }
+function locate(time){
+  const s = seq(); if (!s.length) return null;
+  let acc = 0;
+  for (let i = 0; i < s.length; i++){
+    const d = s[i].out - s[i].in;
+    if (time < acc + d || i === s.length - 1)
+      return {i, seg:s[i], start:acc, src: s[i].in + Math.min(Math.max(time - acc, 0), d - 1e-3)};
+    acc += d;
+  }
+}
+function clampT(x){ const D = duration(); return Math.min(Math.max(x, 0), Math.max(D - 1e-3, 0)); }
+function stripAspect(){
+  const l = locate(t); const m = l && mediaById(l.seg.mediaId);
+  if (mode === 'reel' && reel.length) return mediaById(reel[0].mediaId).aspect;
+  return m ? m.aspect : 16/9;
+}
+
+/* ============ media loading ============ */
+function once(el, ev){ return new Promise((res, rej) => {
+  el.addEventListener(ev, res, {once:true});
+  el.addEventListener('error', () => rej(el.error), {once:true});
+});}
+async function addMedia(src, name){
+  const url = typeof src === 'string' ? src : URL.createObjectURL(src);
+  const mk = muted => { const v = document.createElement('video');
+    v.src = url; v.preload = 'auto'; v.playsInline = true; v.muted = muted; v.crossOrigin = 'anonymous'; return v; };
+  const video = mk(false), tv = mk(true);
+  try { await Promise.all([once(video,'loadeddata'), once(tv,'loadedmetadata')]); }
+  catch(e){ toast('読み込めませんでした: ' + name); return; }
+  const m = {id: uid(), name, url, video, tv,
+    duration: video.duration, w: video.videoWidth || 16, h: video.videoHeight || 9,
+    thumbs: new Map(), want: new Set(), keep: new Set(), focus: 0, working: false,
+    markIn: null, markOut: null, pendingSeek: null, lastT: 0, lastLive: -1};
+  m.aspect = m.w / m.h;
+  m.th = Math.round(THUMB_W / m.aspect);
+  m.tcan = Object.assign(document.createElement('canvas'), {width: THUMB_W, height: m.th});
+  m.lcan = Object.assign(document.createElement('canvas'), {width: THUMB_W, height: m.th});
+  video.addEventListener('seeked', () => {
+    if (m.pendingSeek != null){ const s = m.pendingSeek; m.pendingSeek = null; video.currentTime = s; }
+  });
+  routeAudio(m);
+  media.push(m);
+  selectMedia(m);
+  renderMedia();
+}
+function selectMedia(m){
+  if (cur) cur.lastT = mode === 'source' ? t : cur.lastT;
+  stop();
+  cur = m; mode = 'source'; t = m.lastT || 0; snap();
+  syncModeUI(); renderMedia(); fitViewer();
+}
+
+/* ============ thumbnails (lazy, nearest-first) ============ */
+function putThumb(m, idx, bmp){
+  if (m.thumbs.has(idx)) { bmp.close?.(); return; }
+  m.thumbs.set(idx, bmp);
+  if (m.thumbs.size > MAX_THUMBS){
+    const k = m.thumbs.keys().next().value; m.thumbs.get(k).close?.(); m.thumbs.delete(k);
+  }
+}
+function getThumb(m, idx){
+  const b = m.thumbs.get(idx);
+  if (b) return b;
+  m.want.add(idx); return null;
+}
+async function thumbWorker(m){
+  if (m.working) return; m.working = true;
+  const fAtStart = F;
+  try {
+    while (fAtStart === F){
+      let best = null, bd = Infinity;
+      for (const set of [m.want, m.keep]) for (const i of set){
+        if (m.thumbs.has(i)) { set.delete(i); continue; }
+        const d = Math.abs(i - m.focus) + (set === m.keep ? 4 : 0);
+        if (d < bd){ bd = d; best = i; }
+      }
+      if (best == null) break;
+      m.want.delete(best);
+      const tt = Math.min((best + 0.5) / F, m.duration - 0.02);
+      m.tv.currentTime = tt;
+      await Promise.race([once(m.tv, 'seeked'), new Promise(r => setTimeout(r, 1500))]);
+      if (fAtStart !== F) break;
+      const c = m.tcan.getContext('2d'); c.drawImage(m.tv, 0, 0, THUMB_W, m.th);
+      putThumb(m, best, await createImageBitmap(m.tcan));
+      m.keep.delete(best);
+    }
+  } catch(e){ console.warn(e); }
+  m.working = false;
+}
+async function captureLive(m){
+  const v = m.video;
+  if (v.seeking || v.readyState < 2) return;
+  const idx = Math.floor(v.currentTime * F);
+  if (idx === m.lastLive || m.thumbs.has(idx)) return;
+  m.lastLive = idx;
+  m.lcan.getContext('2d').drawImage(v, 0, 0, THUMB_W, m.th);
+  putThumb(m, idx, await createImageBitmap(m.lcan));
+}
+function resetThumbs(){
+  for (const m of media){ for (const b of m.thumbs.values()) b.close?.(); m.thumbs.clear(); m.want.clear(); m.lastLive = -1; }
+  renderMedia(); renderBin();
+}
+
+/* ============ transport ============ */
+function setSpeed(s){
+  if (!duration()) return;
+  if (s === 0){ stop(); return; }
+  if (s !== 0 && speed === 0 && t >= duration() - 0.05 && s > 0) t = 0;
+  speed = s; fling = 0;
+  if (s <= 0) for (const m of media) m.video.pause();
+  updateTransportUI();
+}
+// park the playhead in the middle of a strip frame so the gate shows one whole frame
+function snap(){ if (duration()) t = clampT((Math.floor(t * F + 1e-6) + 0.5) / F); }
+function stop(){
+  speed = 0; for (const m of media) m.video.pause();
+  snap();
+  updateTransportUI();
+  if (exporting) finishExport();
+}
+function requestSeek(m, src){
+  const v = m.video;
+  if (Math.abs(v.currentTime - src) < 0.002 && m.pendingSeek == null) return;
+  if (v.seeking) m.pendingSeek = src; else v.currentTime = src;
+}
+function step(n){
+  stop();
+  const k = Math.floor(t * F + 1e-6) + n;
+  t = clampT((k + 0.5) / F);
+}
+let lastTs = 0, activeM = null;
+function tick(ts){
+  const dt = lastTs ? Math.min((ts - lastTs) / 1000, 0.1) : 0; lastTs = ts;
+  const D = duration();
+  if (D > 0){
+    let loc = locate(t);
+    if (speed > 0){
+      const m = mediaById(loc.seg.mediaId), v = m.video;
+      for (const o of media) if (o !== m && !o.video.paused) o.video.pause();
+      if (v.paused){ m.pendingSeek = null; v.currentTime = loc.src; v.playbackRate = speed; v.play().catch(()=>{}); }
+      if (v.playbackRate !== speed) v.playbackRate = speed;
+      if (!v.seeking) t = loc.start + (v.currentTime - loc.seg.in);
+      if (v.currentTime >= loc.seg.out - 0.025 || v.ended){
+        if (loc.i < seq().length - 1){ v.pause(); t = loc.start + (loc.seg.out - loc.seg.in) + 1e-4; }
+        else { t = clampT(D); stop(); }
+      }
+      captureLive(m);
+    } else {
+      if (speed < 0){ t += dt * speed; if (t <= 0){ t = 0; stop(); } }
+      else if (!dragging && fling){
+        t += fling * dt; fling *= Math.pow(0.9, dt * 60);
+        if (Math.abs(fling) < 0.02){ fling = 0; snap(); }
+      }
+      t = clampT(t);
+      loc = locate(t);
+      requestSeek(mediaById(loc.seg.mediaId), loc.src);
+    }
+    loc = locate(t);
+    const am = mediaById(loc.seg.mediaId);
+    if (am !== activeM){ activeM = am; fitViewer(); }
+    if (exporting) drawExport(loc);
+    if (mode === 'reel') highlightClip(loc.i);
+  }
+  drawStrip(); drawViewer(); updateCounters();
+  for (const m of media) if ((m.want.size || m.keep.size) && !m.working) thumbWorker(m);
+  requestAnimationFrame(tick);
+}
+
+/* ============ strip drawing ============ */
+let geom = {cellH: 60, gateY: 0};
+function sizeCanvas(c, ctx){
+  const dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)){
+    c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [w, h];
+}
+function rr(ctx, x, y, w, h, r){ ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function fmtSec(s){ const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2,'0')}`; }
+
+function drawStrip(){
+  const [W, H] = sizeCanvas(strip, sctx);
+  const css = getComputedStyle(document.documentElement);
+  sctx.fillStyle = '#0f110f'; sctx.fillRect(0, 0, W, H);
+  const D = duration(), asp = stripAspect();
+  const filmW = Math.min(W - 80, 180), fx = Math.round(36 + Math.max(0, (W - 80 - filmW) / 2));
+  const perfM = filmW * 0.15, imgW = filmW - perfM * 2, imgH = imgW / asp;
+  const gap = Math.max(5, imgH * 0.07), cellH = imgH + gap;
+  const gateY = Math.round(H / 2), p = t * F;
+  geom = {cellH, gateY, fx, filmW};
+  const totalFrames = Math.ceil(D * F - 1e-6);
+  const yOfTime = time => gateY - dir * (time * F - p) * cellH;   // boundary y for a time
+
+  for (const m of media) m.want.clear();
+  // film base
+  sctx.fillStyle = '#2b1a0d'; sctx.fillRect(fx, 0, filmW, H);
+  sctx.fillStyle = 'rgba(255,190,120,.05)'; sctx.fillRect(fx + 2, 0, 1, H); sctx.fillRect(fx + filmW - 3, 0, 1, H);
+
+  const half = Math.ceil(H / 2 / cellH) + 1, pre = 24;
+  const kc = Math.floor(p);
+  const ahead = speed !== 0 ? Math.sign(speed) : 0;
+  let bestD = Infinity;
+  for (let k = kc - half - pre; k <= kc + half + pre; k++){
+    const yc = gateY - dir * ((k + 0.5) - p) * cellH, y0 = yc - cellH / 2;
+    const visible = y0 < H && y0 + cellH > 0;
+    const inRange = D > 0 && k >= 0 && k < totalFrames;
+    if (!visible){
+      // prefetch a little beyond the screen, preferring the playing direction
+      if (inRange && (ahead === 0 || Math.sign(k - kc) === ahead)){
+        const l = locate((k + 0.5) / F); getThumb(mediaById(l.seg.mediaId), Math.floor(l.src * F));
+      }
+      continue;
+    }
+    // perforations: 4 per frame on each side (35mm)
+    sctx.fillStyle = '#0f110f';
+    const ph = cellH / 4 * 0.52, pw = perfM * 0.46;
+    for (let j = 0; j < 4; j++){
+      const py = y0 + (j + 0.5) * cellH / 4 - ph / 2;
+      rr(sctx, fx + perfM * 0.27, py, pw, ph, 2); sctx.fill();
+      rr(sctx, fx + filmW - perfM * 0.27 - pw, py, pw, ph, 2); sctx.fill();
+    }
+    const ix = fx + perfM, iy = y0 + gap / 2;
+    if (inRange){
+      const l = locate((k + 0.5) / F), m = mediaById(l.seg.mediaId);
+      const idx = Math.floor(l.src * F);
+      const dd = Math.abs(k + 0.5 - p); if (dd < bestD){ bestD = dd; m.focus = idx; }
+      const b = getThumb(m, idx);
+      sctx.fillStyle = '#000'; sctx.fillRect(ix, iy, imgW, imgH);
+      if (b){
+        const s = Math.min(imgW / b.width, imgH / b.height), dw = b.width * s, dh = b.height * s;
+        sctx.drawImage(b, ix + (imgW - dw) / 2, iy + (imgH - dh) / 2, dw, dh);
+      } else {
+        sctx.fillStyle = '#1a120a'; sctx.fillRect(ix, iy, imgW, imgH);
+      }
+    } else {
+      // leader
+      sctx.fillStyle = '#3d2b18'; sctx.fillRect(ix, iy, imgW, imgH);
+      sctx.strokeStyle = 'rgba(0,0,0,.25)'; sctx.lineWidth = 1;
+      sctx.beginPath(); sctx.moveTo(ix, iy); sctx.lineTo(ix + imgW, iy + imgH);
+      sctx.moveTo(ix + imgW, iy); sctx.lineTo(ix, iy + imgH); sctx.stroke();
+    }
+    // seconds ruler on the left
+    if (inRange && k % F === 0){
+      const yb = yOfTime(k / F);
+      sctx.fillStyle = '#7d8676'; sctx.font = '10px ' + css.getPropertyValue('--mono');
+      sctx.textAlign = 'right'; sctx.textBaseline = 'middle';
+      sctx.fillText(fmtSec(k / F), fx - 8, yb);
+      sctx.fillRect(fx - 5, yb - 0.5, 4, 1);
+    }
+  }
+  if (D > 0){
+    // tail / head edge
+    sctx.fillStyle = 'rgba(227,165,72,.6)';
+    for (const tt of [0, D]) { const y = yOfTime(tt); if (y > -2 && y < H + 2) sctx.fillRect(fx, y - 1, filmW, 2); }
+  }
+
+  // splice tape at reel joins
+  if (mode === 'reel'){
+    let acc = 0;
+    for (let i = 0; i < reel.length - 1; i++){
+      acc += reel[i].out - reel[i].in;
+      const y = yOfTime(acc);
+      if (y < -cellH || y > H + cellH) continue;
+      const th = Math.min(cellH * 0.6, 40);
+      sctx.fillStyle = 'rgba(230,240,255,.16)'; sctx.fillRect(fx - 3, y - th / 2, filmW + 6, th);
+      sctx.strokeStyle = 'rgba(230,240,255,.35)'; sctx.lineWidth = 1;
+      sctx.strokeRect(fx - 3 + .5, y - th / 2 + .5, filmW + 5, th - 1);
+      sctx.fillStyle = '#9fe0ff'; sctx.fillRect(fx, y - 0.75, filmW, 1.5);
+    }
+  }
+
+  // grease-pencil marks (source)
+  if (mode === 'source' && cur){
+    const g = css.getPropertyValue('--grease');
+    sctx.strokeStyle = g; sctx.fillStyle = g; sctx.lineCap = 'round';
+    const hand = '600 13px "Marker Felt","Bradley Hand",cursive';
+    const mi = cur.markIn, mo = cur.markOut;
+    if (mi != null || mo != null){
+      const ya = yOfTime(mi ?? 0), yb = yOfTime(mo ?? cur.duration);
+      sctx.lineWidth = 3; sctx.globalAlpha = .85;
+      sctx.beginPath(); sctx.moveTo(fx + filmW + 7, ya); sctx.lineTo(fx + filmW + 7, yb); sctx.stroke();
+      sctx.globalAlpha = 1;
+    }
+    const mark = (time, label) => {
+      const y = yOfTime(time); if (y < -20 || y > H + 20) return;
+      sctx.lineWidth = 2.5; sctx.beginPath();
+      for (let x = 0; x <= filmW + 10; x += 6){
+        const yy = y + Math.sin(x * 0.45 + time * 7) * 1.6;
+        x ? sctx.lineTo(fx - 5 + x, yy) : sctx.moveTo(fx - 5 + x, yy);
+      }
+      sctx.stroke();
+      sctx.font = hand; sctx.textAlign = 'left'; sctx.textBaseline = 'middle';
+      sctx.save(); sctx.translate(fx + filmW + 12, y + (label === 'IN' ? 12 : -12) * dir); sctx.rotate(-0.08);
+      sctx.fillText(label, 0, 0); sctx.restore();
+    };
+    if (mi != null) mark(mi, 'IN'); if (mo != null) mark(mo, 'OUT');
+  }
+
+  // gate: the lit aperture
+  const gy = gateY - imgH / 2;
+  const glow = sctx.createRadialGradient(fx + filmW / 2, gateY, 4, fx + filmW / 2, gateY, filmW * 0.9);
+  glow.addColorStop(0, 'rgba(255,225,160,.10)'); glow.addColorStop(1, 'rgba(255,225,160,0)');
+  sctx.fillStyle = glow; sctx.fillRect(fx - 20, gateY - cellH, filmW + 40, cellH * 2);
+  sctx.strokeStyle = css.getPropertyValue('--accent'); sctx.lineWidth = 2;
+  const c = 10, gx0 = fx + perfM - 4, gx1 = fx + perfM + imgW + 4, gy0 = gy - 4, gy1 = gy + imgH + 4;
+  sctx.beginPath();
+  sctx.moveTo(gx0, gy0 + c); sctx.lineTo(gx0, gy0); sctx.lineTo(gx0 + c, gy0);
+  sctx.moveTo(gx1 - c, gy0); sctx.lineTo(gx1, gy0); sctx.lineTo(gx1, gy0 + c);
+  sctx.moveTo(gx0, gy1 - c); sctx.lineTo(gx0, gy1); sctx.lineTo(gx0 + c, gy1);
+  sctx.moveTo(gx1 - c, gy1); sctx.lineTo(gx1, gy1); sctx.lineTo(gx1, gy1 - c);
+  sctx.stroke();
+  sctx.fillStyle = css.getPropertyValue('--accent');
+  sctx.beginPath(); sctx.moveTo(4, gateY - 6); sctx.lineTo(12, gateY); sctx.lineTo(4, gateY + 6); sctx.fill();
+  // direction arrow
+  sctx.font = '11px ' + css.getPropertyValue('--mono'); sctx.textAlign = 'left';
+  sctx.fillStyle = 'rgba(152,160,146,.7)';
+  sctx.fillText(dir > 0 ? '▼' : '▲', W - 16, 14);
+
+  // fade into the darkness top & bottom
+  const fade = (y0, y1) => { const gr = sctx.createLinearGradient(0, y0, 0, y1);
+    gr.addColorStop(0, 'rgba(15,17,15,.92)'); gr.addColorStop(1, 'rgba(15,17,15,0)');
+    sctx.fillStyle = gr; sctx.fillRect(0, Math.min(y0, y1), W, Math.abs(y1 - y0)); };
+  fade(0, H * 0.12); fade(H, H * 0.88);
+}
+
+/* ============ viewer ============ */
+function fitViewer(){
+  const wrap = $('viewerWrap');
+  const asp = activeM ? activeM.aspect : 16/9;
+  const maxW = wrap.clientWidth - 90, maxH = wrap.clientHeight - 90;
+  let w = maxW, h = w / asp; if (h > maxH){ h = maxH; w = h * asp; }
+  w = Math.max(160, Math.floor(w)); h = Math.max(90, Math.floor(h));
+  viewer.style.width = w + 'px'; viewer.style.height = h + 'px';
+  const dpr = devicePixelRatio || 1;
+  viewer.width = Math.round(w * dpr); viewer.height = Math.round(h * dpr);
+}
+function drawContain(ctx, src, sw, sh, W, H){
+  const s = Math.min(W / sw, H / sh), dw = sw * s, dh = sh * s;
+  ctx.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh);
+}
+function drawViewer(){
+  const W = viewer.width, H = viewer.height;
+  vctx.fillStyle = '#000'; vctx.fillRect(0, 0, W, H);
+  const loc = duration() ? locate(t) : null;
+  $('empty').style.display = media.length ? 'none' : 'flex';
+  if (!loc) return;
+  const m = mediaById(loc.seg.mediaId), v = m.video;
+  if (v.readyState >= 2 && !v.seeking) drawContain(vctx, v, m.w, m.h, W, H);
+  else {
+    const b = m.thumbs.get(Math.floor(loc.src * F));
+    if (b) drawContain(vctx, b, b.width, b.height, W, H);
+    else if (v.readyState >= 2) drawContain(vctx, v, m.w, m.h, W, H);
+  }
+  // ground-glass vignette + a breath of projector flicker while running
+  const g = vctx.createRadialGradient(W/2, H/2, Math.min(W,H) * 0.35, W/2, H/2, Math.max(W,H) * 0.72);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)');
+  vctx.fillStyle = g; vctx.fillRect(0, 0, W, H);
+  if (speed !== 0){ vctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.05})`; vctx.fillRect(0, 0, W, H); }
+}
+
+/* ============ UI sync ============ */
+function tc(s){
+  const f = Math.floor(s * TC_FPS + 1e-6);
+  const ff = f % TC_FPS, ss = Math.floor(f / TC_FPS) % 60, mm = Math.floor(f / TC_FPS / 60) % 60, hh = Math.floor(f / TC_FPS / 3600);
+  return [hh, mm, ss, ff].map(n => String(n).padStart(2, '0')).join(':');
+}
+function updateCounters(){
+  $('tc').textContent = tc(t);
+  const fr = Math.floor(t * 24 + 1e-6);   // 35mm: 16 frames per foot at 24fps
+  $('feet').innerHTML = `35mm <b>${Math.floor(fr / 16)}+${String(fr % 16).padStart(2, '0')}</b> ft`;
+}
+const PEDAL = [-4, -2, -1, 0, 0.5, 1, 2, 4];
+function buildPedal(){
+  for (const s of PEDAL){
+    const b = document.createElement('button'); b.dataset.s = s;
+    b.textContent = s === 0 ? '■' : (s < 0 ? '◀' : '▶') + (Math.abs(s) === 0.5 ? '½' : Math.abs(s));
+    b.onclick = () => setSpeed(s);
+    $('pedal').appendChild(b);
+  }
+}
+function updateTransportUI(){
+  $('playBtn').textContent = speed === 0 ? '▶︎' : '❚❚';
+  for (const b of $('pedal').querySelectorAll('button')) b.classList.toggle('primary', +b.dataset.s === speed);
+}
+function syncModeUI(){
+  for (const b of $('modeSeg').children) b.classList.toggle('on', b.dataset.mode === mode);
+  $('srcTools').style.display = mode === 'source' ? 'flex' : 'none';
+  $('reelTools').style.display = mode === 'reel' ? 'flex' : 'none';
+  $('exportBtn').disabled = !reel.length;
+  updateMarks(); renderBin();
+}
+function updateMarks(){
+  if (!cur) { $('marks').textContent = ''; return; }
+  const a = cur.markIn != null ? tc(cur.markIn) : '--', b = cur.markOut != null ? tc(cur.markOut) : '--';
+  $('marks').textContent = `IN ${a}  OUT ${b}`;
+}
+function setMode(m){
+  if (m === mode) return;
+  if (m === 'reel' && !reel.length){ toast('リールはまだ空です'); return; }
+  if (m === 'source' && !cur) return;
+  stop();
+  if (mode === 'source' && cur) cur.lastT = t; else reelT = t;
+  mode = m;
+  t = mode === 'source' ? cur.lastT : reelT;
+  t = clampT(t); activeM = null;
+  syncModeUI();
+}
+let toastTimer;
+function toast(msg){ const e = $('toast'); e.textContent = msg; e.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => e.classList.remove('show'), 1800); }
+
+/* ============ thumbnails in DOM (media list, bin) ============ */
+const domThumbs = new Map(); // canvas -> {m, idx}
+function domThumb(m, time, cls){
+  const c = document.createElement('canvas'); c.width = THUMB_W; c.height = m.th; if (cls) c.className = cls;
+  domThumbs.set(c, {m, idx: Math.floor(Math.min(time, m.duration - 0.02) * F)});
+  return c;
+}
+setInterval(() => {
+  for (const [c, j] of domThumbs){
+    if (!c.isConnected && c._seen){ domThumbs.delete(c); j.m.keep.delete(j.idx); continue; }
+    if (c.isConnected) c._seen = true;
+    const b = j.m.thumbs.get(j.idx);
+    if (b){ c.getContext('2d').drawImage(b, 0, 0, c.width, c.height); domThumbs.delete(c); j.m.keep.delete(j.idx); }
+    else j.m.keep.add(j.idx);
+  }
+}, 250);
+
+function renderMedia(){
+  const list = $('mediaList'); list.innerHTML = '';
+  $('mediaCount').textContent = media.length ? media.length + ' 本' : '';
+  for (const m of media){
+    const d = document.createElement('div'); d.className = 'media' + (m === cur && mode === 'source' ? ' on' : '');
+    d.appendChild(domThumb(m, m.duration * 0.25));
+    const info = document.createElement('div'); info.style.minWidth = '0';
+    info.innerHTML = `<div class="nm"></div><div class="du">${tc(m.duration)}</div>`;
+    info.firstChild.textContent = m.name;
+    d.appendChild(info);
+    d.onclick = () => { if (mode === 'source' && cur) cur.lastT = t; mode = 'source'; selectMedia(m); };
+    list.appendChild(d);
+  }
+}
+
+let dragIdx = null, lastHi = -1;
+function renderBin(){
+  const bin = $('bin'); bin.innerHTML = ''; lastHi = -1;
+  $('binEmpty').style.display = reel.length ? 'none' : 'block';
+  $('reelDur').textContent = reel.length ? tc(reel.reduce((a, s) => a + s.out - s.in, 0)) : '';
+  $('exportBtn').disabled = !reel.length;
+  reel.forEach((seg, i) => {
+    const m = mediaById(seg.mediaId);
+    const el = document.createElement('div'); el.className = 'clip'; el.draggable = true;
+    const film = document.createElement('div'); film.className = 'film';
+    for (const tt of [seg.in, (seg.in + seg.out) / 2, seg.out - 0.05]) film.appendChild(domThumb(m, tt));
+    el.innerHTML = '<div class="pin"></div>';
+    el.appendChild(film);
+    const meta = document.createElement('div'); meta.className = 'meta';
+    meta.innerHTML = `<div class="n">#${i + 1}</div><div>${(seg.out - seg.in).toFixed(1)}s</div>`;
+    el.appendChild(meta);
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '×'; x.title = 'リールから外す';
+    x.onclick = e => { e.stopPropagation(); pushUndo(); reel.splice(i, 1); afterReelEdit(); };
+    el.appendChild(x);
+    el.title = `${m.name}  ${tc(seg.in)} – ${tc(seg.out)}`;
+    el.onclick = () => {
+      let acc = 0; for (let j = 0; j < i; j++) acc += reel[j].out - reel[j].in;
+      if (mode !== 'reel'){ if (cur) cur.lastT = t; mode = 'reel'; syncModeUI(); }
+      stop(); t = clampT(acc + 0.5 / F);
+    };
+    el.ondragstart = e => { dragIdx = i; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
+    el.ondragend = () => { dragIdx = null; el.classList.remove('dragging'); };
+    el.ondragover = e => { if (dragIdx == null) return; e.preventDefault(); e.stopPropagation(); el.classList.add('dropBefore'); };
+    el.ondragleave = () => el.classList.remove('dropBefore');
+    el.ondrop = e => {
+      e.preventDefault(); e.stopPropagation(); el.classList.remove('dropBefore');
+      if (dragIdx == null || dragIdx === i) return;
+      pushUndo(); const [s] = reel.splice(dragIdx, 1); reel.splice(dragIdx < i ? i - 1 : i, 0, s); afterReelEdit();
+    };
+    bin.appendChild(el);
+  });
+  bin.ondragover = e => { if (dragIdx != null) e.preventDefault(); };
+  bin.ondrop = e => { if (dragIdx == null) return; e.preventDefault();
+    pushUndo(); const [s] = reel.splice(dragIdx, 1); reel.push(s); afterReelEdit(); };
+}
+function highlightClip(i){
+  if (i === lastHi) return; lastHi = i;
+  [...$('bin').children].forEach((c, j) => c.classList.toggle('on', j === i));
+}
+
+/* ============ editing ============ */
+function pushUndo(){ undoStack.push(JSON.stringify(reel)); if (undoStack.length > 100) undoStack.shift(); redoStack.length = 0; }
+function undo(redo){
+  const from = redo ? redoStack : undoStack, to = redo ? undoStack : redoStack;
+  if (!from.length) return;
+  to.push(JSON.stringify(reel)); reel = JSON.parse(from.pop()); afterReelEdit();
+  toast(redo ? 'やり直し' : '取り消し');
+}
+function afterReelEdit(){
+  if (mode === 'reel'){
+    if (!reel.length){ mode = 'source'; t = cur ? cur.lastT : 0; }
+    t = clampT(t);
+  }
+  activeM = null; syncModeUI();
+}
+function markIn(){ if (mode !== 'source' || !cur) return; cur.markIn = locate(t).src;
+  if (cur.markOut != null && cur.markOut <= cur.markIn) cur.markOut = null; updateMarks(); }
+function markOut(){ if (mode !== 'source' || !cur) return; cur.markOut = Math.min(locate(t).src + 1 / F / 2, cur.duration);
+  if (cur.markIn != null && cur.markIn >= cur.markOut) cur.markIn = null; updateMarks(); }
+function splice(){
+  if (mode !== 'source' || !cur) return;
+  const a = cur.markIn ?? 0, b = cur.markOut ?? cur.duration;
+  if (b - a < 1 / 24){ toast('IN と OUT の間が短すぎます'); return; }
+  pushUndo();
+  reel.push({id: uid(), mediaId: cur.id, in: a, out: b});
+  cur.markIn = cur.markOut = null; updateMarks(); renderBin();
+  toast(`リールに継ぎました（#${reel.length}・${(b - a).toFixed(1)}s）`);
+}
+function cutAtGate(){
+  if (mode !== 'reel') return;
+  stop();
+  const l = locate(t), at = l.src;
+  if (at - l.seg.in < 1 / F || l.seg.out - at < 1 / F){ toast('カットの端に近すぎます'); return; }
+  pushUndo();
+  reel.splice(l.i, 1, {...l.seg, id: uid(), out: at}, {...l.seg, id: uid(), in: at});
+  afterReelEdit(); toast('ゲート位置で切りました');
+}
+function liftAtGate(){
+  if (mode !== 'reel') return;
+  stop();
+  const l = locate(t); pushUndo(); reel.splice(l.i, 1); t = l.start; afterReelEdit();
+  toast(`#${l.i + 1} を外しました`);
+}
+
+/* ============ export ============ */
+let audioCtx = null, recDest = null;
+function routeAudio(m){
+  if (!audioCtx || m.routed) return;
+  const src = audioCtx.createMediaElementSource(m.video);
+  src.connect(audioCtx.destination); src.connect(recDest); m.routed = true;
+}
+function ensureAudio(){
+  if (!audioCtx){ audioCtx = new AudioContext(); recDest = audioCtx.createMediaStreamDestination(); }
+  audioCtx.resume(); media.forEach(routeAudio);
+}
+function startExport(){
+  if (!reel.length) return;
+  ensureAudio(); stop();
+  const first = mediaById(reel[0].mediaId);
+  const s = Math.min(1, 1920 / first.w);
+  const ec = document.createElement('canvas'); ec.width = Math.round(first.w * s / 2) * 2; ec.height = Math.round(first.h * s / 2) * 2;
+  const stream = ec.captureStream(30);
+  recDest.stream.getAudioTracks().forEach(tr => stream.addTrack(tr));
+  const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+  const mimeType = types.find(x => MediaRecorder.isTypeSupported(x)) || '';
+  const rec = new MediaRecorder(stream, {mimeType, videoBitsPerSecond: 8e6});
+  const chunks = []; rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  exporting = {rec, ec, ctx: ec.getContext('2d'), cancelled: false, D: reel.reduce((a, s) => a + s.out - s.in, 0)};
+  rec.onstop = () => {
+    const ex = exporting; exporting = null; $('exportOverlay').classList.remove('show');
+    if (ex.cancelled){ toast('書き出しを中止しました'); return; }
+    const blob = new Blob(chunks, {type: rec.mimeType});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'makefilm-reel.' + (rec.mimeType.includes('mp4') ? 'mp4' : 'webm'); a.click();
+    toast('書き出しました');
+  };
+  if (mode !== 'reel'){ if (cur) cur.lastT = t; mode = 'reel'; syncModeUI(); }
+  t = 0; $('exportOverlay').classList.add('show');
+  rec.start(250); setSpeed(1);
+}
+function drawExport(loc){
+  const ex = exporting, m = mediaById(loc.seg.mediaId);
+  ex.ctx.fillStyle = '#000'; ex.ctx.fillRect(0, 0, ex.ec.width, ex.ec.height);
+  if (m.video.readyState >= 2) drawContain(ex.ctx, m.video, m.w, m.h, ex.ec.width, ex.ec.height);
+  $('exportBar').style.width = (t / ex.D * 100).toFixed(1) + '%';
+  $('exportInfo').textContent = `${tc(t)} / ${tc(ex.D)}`;
+}
+function finishExport(){ const ex = exporting; if (ex && ex.rec.state !== 'inactive') ex.rec.stop(); }
+
+/* ============ input ============ */
+let lastY = 0, lastMoveT = 0, moved = 0, vel = 0;
+strip.addEventListener('pointerdown', e => {
+  if (exporting) return;
+  strip.setPointerCapture(e.pointerId); strip.classList.add('grabbing');
+  dragging = true; lastY = e.clientY; moved = 0; vel = 0; fling = 0; lastMoveT = performance.now();
+  if (speed !== 0) stop();
+});
+strip.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const dy = e.clientY - lastY; lastY = e.clientY; moved += Math.abs(dy);
+  const d = dir * dy / geom.cellH / F;
+  t = clampT(t + d);
+  const now = performance.now(), dtm = Math.max(now - lastMoveT, 1) / 1000; lastMoveT = now;
+  vel = vel * 0.6 + (d / dtm) * 0.4;
+});
+const endDrag = e => {
+  if (!dragging) return;
+  dragging = false; strip.classList.remove('grabbing');
+  if (moved < 4){
+    const r = strip.getBoundingClientRect(), y = e.clientY - r.top;
+    const k = Math.floor(t * F - dir * (y - geom.gateY) / geom.cellH);
+    t = clampT((k + 0.5) / F);
+  } else if (performance.now() - lastMoveT < 80) fling = vel;
+  else snap();
+};
+strip.addEventListener('pointerup', endDrag);
+strip.addEventListener('pointercancel', endDrag);
+strip.addEventListener('wheel', e => {
+  e.preventDefault(); if (exporting) return;
+  if (speed !== 0) stop(); fling = 0;
+  t = clampT(t - dir * e.deltaY / geom.cellH / F);
+}, {passive: false});
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (exporting){ if (e.key === 'Escape') cancelExport(); return; }
+  const k = e.key.toLowerCase();
+  if ((e.metaKey || e.ctrlKey) && k === 'z'){ e.preventDefault(); undo(e.shiftKey); return; }
+  if (e.metaKey || e.ctrlKey) return;
+  const handled = () => e.preventDefault();
+  switch (k){
+    case ' ': handled(); setSpeed(speed === 0 ? 1 : 0); if (speed === 0) stop(); break;
+    case 'k': stop(); break;
+    case 'l': setSpeed(speed <= 0 ? 1 : Math.min(speed * 2, 4)); break;
+    case 'j': setSpeed(speed >= 0 ? -1 : Math.max(speed * 2, -4)); break;
+    case 'arrowright': handled(); step(e.shiftKey ? F : 1); break;
+    case 'arrowleft':  handled(); step(e.shiftKey ? -F : -1); break;
+    case 'arrowdown':  handled(); step((e.shiftKey ? F : 1) * dir); break;   // film moves down
+    case 'arrowup':    handled(); step((e.shiftKey ? -F : -1) * dir); break;
+    case 'home': t = 0; stop(); break;
+    case 'end': stop(); t = clampT(duration()); break;
+    case 'i': markIn(); break;
+    case 'o': markOut(); break;
+    case 'enter': handled(); splice(); break;
+    case 'c': cutAtGate(); break;
+    case 'x': case 'delete': case 'backspace': liftAtGate(); break;
+    case '1': setMode('source'); break;
+    case '2': setMode('reel'); break;
+  }
+});
+
+function cancelExport(){ if (!exporting) return; exporting.cancelled = true; stop(); }
+$('exportCancel').onclick = cancelExport;
+$('exportBtn').onclick = startExport;
+$('playBtn').onclick = () => { if (speed === 0) setSpeed(1); else stop(); };
+$('prevBtn').onclick = () => step(-1);
+$('nextBtn').onclick = () => step(1);
+$('inBtn').onclick = markIn; $('outBtn').onclick = markOut; $('spliceBtn').onclick = splice;
+$('cutBtn').onclick = cutAtGate; $('liftBtn').onclick = liftAtGate; $('undoBtn').onclick = () => undo(false);
+for (const b of $('modeSeg').children) b.onclick = () => setMode(b.dataset.mode);
+for (const b of $('dirSeg').children) b.onclick = () => {
+  dir = +b.dataset.dir; for (const o of $('dirSeg').children) o.classList.toggle('on', o === b); };
+$('fpsSel').onchange = e => { F = +e.target.value; resetThumbs(); e.target.blur(); };
+const openFiles = () => $('fileInput').click();
+$('openBtn').onclick = openFiles; $('openBtn2').onclick = openFiles;
+$('fileInput').onchange = e => { for (const f of e.target.files) addMedia(f, f.name); e.target.value = ''; };
+
+let dragDepth = 0;
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+addEventListener('dragenter', e => { if (hasFiles(e)){ dragDepth++; document.body.classList.add('dragover'); } });
+addEventListener('dragleave', e => { if (hasFiles(e) && --dragDepth <= 0){ dragDepth = 0; document.body.classList.remove('dragover'); } });
+addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragover');
+  for (const f of e.dataTransfer.files) if (f.type.startsWith('video/') || /\.(mp4|mov|webm|m4v|mkv)$/i.test(f.name)) addMedia(f, f.name);
+});
+new ResizeObserver(fitViewer).observe($('viewerWrap'));
+
+buildPedal(); updateTransportUI(); syncModeUI(); fitViewer();
+requestAnimationFrame(tick);
+// ?src=path/to/video.mp4 for quick testing
+const qs = new URLSearchParams(location.search).get('src');
+if (qs) addMedia(qs, qs.split('/').pop());
+</script>
+</body>
+</html>
