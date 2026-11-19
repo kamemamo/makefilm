@@ -75,9 +75,13 @@ final class FilmStripNSView: NSView {
         let F = Double(ed.stripFPS)
         let dir = CGFloat(ed.direction)
         // real 35mm print proportions (see Film35): 4-perf frames, Academy picture, optical soundtrack
-        let filmW = min(W - 80, 180)
-        let fx = (36 + max(0, (W - 80 - filmW) / 2)).rounded()
+        // In the reel, a sound reel (magnetic film with the music) runs right beside the picture.
+        let soundReel = ed.mode == .reel
+        let filmW = soundReel ? min((W - 36 - 14 - 22) / 2, 170) : min(W - 80, 180)
+        let fx = soundReel ? 36 : (36 + max(0, (W - 80 - filmW) / 2)).rounded()
         let mm = filmW / Film35.width
+        soundX = soundReel ? fx + filmW + 14 : -1
+        soundW = soundReel ? filmW : 0
         cellH = Film35.pitch * mm
         let picX = fx + Film35.picX * mm, picW = Film35.picW * mm, picH = Film35.picH * mm
         gateY = (H / 2).rounded()
@@ -254,6 +258,8 @@ final class FilmStripNSView: NSView {
             if let b = outLine { mark(b, "OUT", -12) }
         }
 
+        if soundReel { drawSoundReel(ctx, ed: ed, x: soundX, w: soundW, mm: mm, H: H, p: p, dir: dir, F: F, yOf: yOf) }
+
         // the gate: lit aperture with corner brackets
         let cx = fx + filmW / 2
         if let glow = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
@@ -303,12 +309,112 @@ final class FilmStripNSView: NSView {
         ctx.restoreGState()
     }
 
+    // MARK: sound reel
+
+    private var soundX: CGFloat = -1
+    private var soundW: CGFloat = 0
+    private var musicDrag: UUID?
+    private var musicUndoPushed = false
+
+    /// Magnetic sound film beside the picture: perforations, oxide coat, the music as a waveform,
+    /// grease-pencil lines at each clip's head and tail. The selected clip is outlined.
+    @MainActor
+    private func drawSoundReel(_ ctx: CGContext, ed: Editor, x sx: CGFloat, w: CGFloat, mm: CGFloat, H: CGFloat,
+                               p: Double, dir: CGFloat, F: Double, yOf: (Double) -> CGFloat) {
+        ctx.setFillColor(.hex(0x3A2210)); ctx.fill(CGRect(x: sx, y: 0, width: w, height: H))
+        ctx.setFillColor(.hex(0x55311A)); ctx.fill(CGRect(x: sx + 5.6 * mm, y: 0, width: w - 11.2 * mm, height: H))   // oxide
+        // perforations, in step with the picture frames
+        let ph = Film35.perfH * mm, pw = Film35.perfW * mm, pr = Film35.perfCorner * mm
+        let kc = Int(p.rounded(.down)), half = Int((H / 2 / cellH).rounded(.up)) + 1
+        ctx.setFillColor(.hex(0x0F110F))
+        for k in (kc - half)...(kc + half) {
+            let y0 = gateY - dir * (CGFloat(k) + 0.5 - CGFloat(p)) * cellH - cellH / 2
+            for j in 0..<4 {
+                let py = y0 + (CGFloat(j) + 0.5) * Film35.perfPitch * mm - ph / 2
+                ctx.addPath(CGPath(roundedRect: CGRect(x: sx + Film35.perfLeftX * mm, y: py, width: pw, height: ph), cornerWidth: pr, cornerHeight: pr, transform: nil))
+                ctx.addPath(CGPath(roundedRect: CGRect(x: sx + Film35.perfRightX * mm, y: py, width: pw, height: ph), cornerWidth: pr, cornerHeight: pr, transform: nil))
+            }
+        }
+        ctx.fillPath()
+
+        let cx = sx + w / 2, halfW = 10.5 * mm
+        let step: CGFloat = 2, span = Double(step / cellH) / F
+        let timeAt: (CGFloat) -> Double = { [cellH, gateY] y in (p - Double((y - gateY) / (dir * cellH))) / F }
+        let grease = CGColor.hex(0xF6EEB4)
+        let labelAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 9, weight: .semibold),
+                                                         .foregroundColor: NSColor(cgColor: grease)!]
+        for c in ed.music {
+            var ya = yOf(c.at), yb = yOf(c.endAt)
+            if ya > yb { swap(&ya, &yb) }
+            guard yb > 0, ya < H else { continue }
+            let y0 = max(0, ya), y1 = min(H, yb)
+            let env = ed.envelopes[c.sourceID]
+            let path = soundtrackPath(centerX: cx, halfWidth: halfW, y0: y0, y1: y1, step: step) { y in
+                let t = timeAt(y)
+                guard let env else { return 0.05 }
+                let a = c.start + (t - span / 2 - c.at), b = c.start + (t + span / 2 - c.at)
+                return max(env.level(0, from: a, to: b), env.level(1, from: a, to: b)) * Float(min(1.2, c.volume(atReel: t)))
+            }
+            ctx.setFillColor(.hex(0xEDE6D3, 0.85)); ctx.addPath(path); ctx.fillPath()
+
+            if c.id == ed.selectedMusicID {
+                ctx.setStrokeColor(.hex(0xE3A548)); ctx.setLineWidth(2)
+                ctx.stroke(CGRect(x: sx + 5.6 * mm + 1, y: y0, width: w - 11.2 * mm - 2, height: y1 - y0))
+            }
+            // head and tail in grease pencil, name at the head
+            ctx.setStrokeColor(grease); ctx.setLineWidth(2); ctx.setLineCap(.round)
+            for y in [yOf(c.at), yOf(c.endAt)] where y > -4 && y < H + 4 {
+                var x: CGFloat = 0
+                while x <= w + 6 {
+                    let yy = y + sin(x * 0.5 + CGFloat(c.at) * 5) * 1.2
+                    x == 0 ? ctx.move(to: CGPoint(x: sx - 3 + x, y: yy)) : ctx.addLine(to: CGPoint(x: sx - 3 + x, y: yy))
+                    x += 5
+                }
+                ctx.strokePath()
+            }
+            let headY = yOf(c.at)
+            if headY > -20 && headY < H + 20, let name = ed.source(c.sourceID)?.name {
+                let s = ("♪ " + (name as NSString).deletingPathExtension) as NSString
+                let sz = s.size(withAttributes: labelAttrs)
+                let y = headY - dir * 9 - sz.height / 2
+                ctx.saveGState()
+                ctx.clip(to: CGRect(x: sx + 6 * mm, y: 0, width: w - 12 * mm, height: H))
+                s.draw(at: CGPoint(x: sx + 6.5 * mm, y: y), withAttributes: labelAttrs)
+                ctx.restoreGState()
+            }
+        }
+        // the gate line runs across the sound film too
+        ctx.setFillColor(.hex(0xE3A548, 0.8))
+        ctx.fill(CGRect(x: sx - 2, y: gateY - cellH / 2 - 1, width: 6, height: 2))
+        ctx.fill(CGRect(x: sx + w - 4, y: gateY - cellH / 2 - 1, width: 6, height: 2))
+        ctx.fill(CGRect(x: sx - 2, y: gateY + cellH / 2 - 1, width: 6, height: 2))
+        ctx.fill(CGRect(x: sx + w - 4, y: gateY + cellH / 2 - 1, width: 6, height: 2))
+    }
+
     // MARK: hand-cranking
 
     private var F: Double { Double(MainActor.assumeIsolated { editor?.stripFPS ?? 12 }) }
     private var dirD: Double { Double(MainActor.assumeIsolated { editor?.direction ?? 1 }) }
 
     override func mouseDown(with e: NSEvent) {
+        let pt = convert(e.locationInWindow, from: nil)
+        // On the sound reel, grabbing a music clip slides it against the picture.
+        if soundX >= 0, pt.x >= soundX, pt.x <= soundX + soundW {
+            let fps = F, dir = dirD, ch = Double(cellH), gy = Double(gateY)
+            let hit: UUID? = MainActor.assumeIsolated {
+                guard let ed = editor else { return nil }
+                let t = (ed.time * fps - dir * (Double(pt.y) - gy) / ch) / fps
+                let c = ed.musicClip(atReel: t)
+                ed.selectedMusicID = c?.id
+                return c?.id
+            }
+            if let hit {
+                musicDrag = hit; musicUndoPushed = false
+                NSCursor.closedHand.push()
+                lastY = pt.y; moved = 0
+                return
+            }
+        }
         MainActor.assumeIsolated { editor?.beginDrag() }
         NSCursor.closedHand.push()
         lastY = convert(e.locationInWindow, from: nil).y
@@ -320,6 +426,16 @@ final class FilmStripNSView: NSView {
         let dy = y - lastY
         lastY = y
         moved += abs(dy)
+        if let id = musicDrag {
+            let d = dirD * Double(dy / cellH) / F
+            let first = !musicUndoPushed && moved >= 3
+            if first { musicUndoPushed = true }
+            MainActor.assumeIsolated {
+                if first { editor?.beginMusicMove() }
+                if musicUndoPushed { editor?.slideMusic(id, by: d) }
+            }
+            return
+        }
         let d = dirD * Double(dy / cellH) / F
         MainActor.assumeIsolated { editor?.scrub(by: d) }
         let dt = max(e.timestamp - lastMoveT, 0.001)
@@ -329,6 +445,11 @@ final class FilmStripNSView: NSView {
 
     override func mouseUp(with e: NSEvent) {
         NSCursor.pop()
+        if let id = musicDrag {
+            musicDrag = nil
+            if musicUndoPushed { MainActor.assumeIsolated { editor?.commitMusicMove(id) } }
+            return
+        }
         let y = convert(e.locationInWindow, from: nil).y
         let fps = F, dir = dirD, ch = Double(cellH), gy = Double(gateY)
         let flick = e.timestamp - lastMoveT < 0.08 ? vel : nil

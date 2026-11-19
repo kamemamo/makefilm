@@ -189,7 +189,10 @@ extension Editor {
         if o.format.isTimeline { exportTimeline(o); return }
 
         let segs = exportSegments(o.target)
-        guard !segs.isEmpty, let c = ReelComposition.build(segs, clips: clipMap) else {
+        // the reel carries the sound reel with it; a source range does not
+        let withMusic = o.target == .reel
+        guard !segs.isEmpty, let c = ReelComposition.build(segs, clips: clipMap,
+                                                           music: withMusic ? music : [], sources: sourceMap) else {
             toast(L("書き出すフィルムがありません")); return
         }
         if o.format == .audio && c.composition.tracks(withMediaType: .audio).isEmpty {
@@ -207,6 +210,7 @@ extension Editor {
         try? FileManager.default.removeItem(at: url)
 
         if o.format.isMovie { session.videoComposition = c.videoComposition }
+        session.audioMix = c.audioMix
         session.outputURL = url
         session.outputFileType = o.format.fileType
         exportSession = session
@@ -259,12 +263,15 @@ extension Editor {
         let seqName = (url.lastPathComponent as NSString).deletingPathExtension
         let used = Set(segs.map(\.mediaID)).compactMap { clip($0) }
 
+        let musicNow = o.target == .reel ? music : []
+        let sources = sourceMap
         Task {
             var clips: [UUID: TimelineClip] = [:]
             for m in used { clips[m.id] = await TimelineClip.gather(m) }
+            let tm = await TimelineMusic.gather(musicNow, sources: sources)
             let xml = o.format == .fcpxml
-                ? TimelineExport.fcpxml(name: seqName, segments: segs, clips: clips)
-                : TimelineExport.xmeml(name: seqName, segments: segs, clips: clips)
+                ? TimelineExport.fcpxml(name: seqName, segments: segs, clips: clips, music: tm)
+                : TimelineExport.xmeml(name: seqName, segments: segs, clips: clips, music: tm)
             do {
                 guard let xml else { throw LoadError(message: L("タイムラインを作れませんでした")) }
                 try xml.write(to: url, atomically: true, encoding: .utf8)

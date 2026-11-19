@@ -85,6 +85,32 @@ struct TimelineClip {
     }
 }
 
+/// A sound-reel clip with what the XML needs to know about its audio file.
+struct TimelineMusic {
+    let clip: MusicClip
+    let source: AudioSource
+    let channels: Int
+    let sampleRate: Int
+
+    static func gather(_ music: [MusicClip], sources: [UUID: AudioSource]) async -> [TimelineMusic] {
+        var out: [TimelineMusic] = []
+        for c in music {
+            guard let s = sources[c.sourceID] else { continue }
+            var ch = 2, sr = 48_000
+            if let fd = try? await s.track.load(.formatDescriptions).first,
+               let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(fd)?.pointee {
+                ch = max(1, Int(asbd.mChannelsPerFrame)); sr = Int(asbd.mSampleRate)
+            }
+            out.append(TimelineMusic(clip: c, source: s, channels: ch, sampleRate: sr))
+        }
+        return out
+    }
+
+    var gainDB: String {
+        clip.gain <= 0.0001 ? "-96dB" : String(format: "%.1fdB", 20 * log10(clip.gain))
+    }
+}
+
 private func esc(_ s: String) -> String {
     s.replacingOccurrences(of: "&", with: "&amp;")
         .replacingOccurrences(of: "<", with: "&lt;")
@@ -96,7 +122,7 @@ private func esc(_ s: String) -> String {
 enum TimelineExport {
 
     /// Final Cut Pro / DaVinci Resolve: FCPXML 1.10, clips reference the original files.
-    static func fcpxml(name: String, segments: [Segment], clips: [UUID: TimelineClip]) -> String? {
+    static func fcpxml(name: String, segments: [Segment], clips: [UUID: TimelineClip], music: [TimelineMusic] = []) -> String? {
         guard let first = segments.first.flatMap({ clips[$0.mediaID] }) else { return nil }
         let seq = first.rate
         var resources: [String] = []
@@ -132,16 +158,59 @@ enum TimelineExport {
             """)
         }
 
-        var spine: [String] = []
+        // audio-only assets for the sound reel
+        var musicAssetIDs: [UUID: String] = [:]
+        for m in music where musicAssetIDs[m.source.id] == nil {
+            let id = newID()
+            musicAssetIDs[m.source.id] = id
+            resources.append("""
+                    <asset id="\(id)" name="\(esc(m.source.name))" start="0s" duration="\(seq.time(seq.frames(m.source.duration)))" hasAudio="1" audioSources="1" audioChannels="\(m.channels)" audioRate="\(m.sampleRate)">
+                        <media-rep kind="original-media" src="\(esc(m.source.url.absoluteString))"/>
+                    </asset>
+            """)
+        }
+
+        // lay out the picture first, so each music clip can be connected to the clip it starts under
+        struct Placed { let ref: String; let c: TimelineClip; let offset: Int; let dur: Int; let start: Int }
+        var placed: [Placed] = []
         var offset = 0
         for seg in segments {
             guard let c = clips[seg.mediaID], let ref = assetIDs[seg.mediaID] else { continue }
             let dur = max(1, seq.frames(seg.length))
-            let start = c.tcStart + c.rate.frames(seg.start)
-            spine.append("""
-                                <asset-clip ref="\(ref)" name="\(esc(c.media.name))" offset="\(seq.time(offset))" start="\(c.rate.time(start))" duration="\(seq.time(dur))" format="\(formatID(c))" tcFormat="NDF"/>
-            """)
+            placed.append(Placed(ref: ref, c: c, offset: offset, dur: dur, start: c.tcStart + c.rate.frames(seg.start)))
             offset += dur
+        }
+        let total = offset
+
+        var spine: [String] = []
+        for (i, pl) in placed.enumerated() {
+            // music whose head falls inside this picture clip hangs below it (lane -1), as connected clips
+            var connected: [String] = []
+            for m in music {
+                let at = seq.frames(m.clip.at)
+                guard at >= pl.offset, at < pl.offset + pl.dur || (i == placed.count - 1 && at < total),
+                      let ref = musicAssetIDs[m.source.id] else { continue }
+                let len = min(seq.frames(m.clip.length), total - at)
+                guard len > 0 else { continue }
+                // a connected clip's offset is in its parent's own (source) timeline
+                let localOffset = pl.c.rate.time(pl.start + pl.c.rate.frames(Double(at - pl.offset) * Double(seq.num) / Double(seq.den)))
+                var fades = ""
+                if m.clip.fadeIn > 0 || m.clip.fadeOut > 0 {
+                    fades = "<param name=\"amount\">"
+                        + (m.clip.fadeIn > 0 ? "<fadeIn type=\"easeIn\" duration=\"\(seq.time(max(1, seq.frames(m.clip.fadeIn))))\"/>" : "")
+                        + (m.clip.fadeOut > 0 ? "<fadeOut type=\"easeIn\" duration=\"\(seq.time(max(1, seq.frames(m.clip.fadeOut))))\"/>" : "")
+                        + "</param>"
+                }
+                connected.append("""
+                                    <asset-clip ref="\(ref)" lane="-1" name="\(esc(m.source.name))" offset="\(localOffset)" start="\(seq.time(seq.frames(m.clip.start)))" duration="\(seq.time(len))" audioRole="music"><adjust-volume amount="\(m.gainDB)">\(fades)</adjust-volume></asset-clip>
+                """)
+            }
+            let head = #"<asset-clip ref="\#(pl.ref)" name="\#(esc(pl.c.media.name))" offset="\#(seq.time(pl.offset))" start="\#(pl.c.rate.time(pl.start))" duration="\#(seq.time(pl.dur))" format="\#(formatID(pl.c))" tcFormat="NDF""#
+            if connected.isEmpty {
+                spine.append("                    " + head + "/>")
+            } else {
+                spine.append("                    " + head + ">\n" + connected.joined(separator: "\n") + "\n                    </asset-clip>")
+            }
         }
 
         return """
@@ -168,7 +237,7 @@ enum TimelineExport {
     }
 
     /// Premiere Pro (and Resolve): Final Cut Pro 7 XML ("xmeml").
-    static func xmeml(name: String, segments: [Segment], clips: [UUID: TimelineClip]) -> String? {
+    static func xmeml(name: String, segments: [Segment], clips: [UUID: TimelineClip], music: [TimelineMusic] = []) -> String? {
         guard let first = segments.first.flatMap({ clips[$0.mediaID] }) else { return nil }
         let seq = first.rate
         func rate(_ r: FrameRate) -> String {
@@ -239,6 +308,41 @@ enum TimelineExport {
             offset += dur
         }
 
+        // the sound reel as its own audio track, with its level
+        var musicItems: [String] = []
+        var musicFileIDs: [UUID: String] = [:]
+        for (i, m) in music.enumerated() {
+            let at = seq.frames(m.clip.at)
+            let len = min(seq.frames(m.clip.length), offset - at)
+            guard at < offset, len > 0 else { continue }
+            let inF = seq.frames(m.clip.start)
+            let fileXML: String
+            if let id = musicFileIDs[m.source.id] {
+                fileXML = "<file id=\"\(id)\"/>"
+            } else {
+                let id = "file-music-\(musicFileIDs.count + 1)"
+                musicFileIDs[m.source.id] = id
+                let path = m.source.url.absoluteString.replacingOccurrences(of: "file://", with: "file://localhost")
+                fileXML = """
+                <file id="\(id)"><name>\(esc(m.source.name))</name><pathurl>\(esc(path))</pathurl>\(rate(seq))<duration>\(seq.frames(m.source.duration))</duration><media><audio><samplecharacteristics><depth>16</depth><samplerate>\(m.sampleRate)</samplerate></samplecharacteristics><channelcount>\(m.channels)</channelcount></audio></media></file>
+                """
+            }
+            musicItems.append("""
+            <clipitem id="clipitem-m\(i + 1)">
+            <name>\(esc(m.source.name))</name>
+            <enabled>TRUE</enabled>
+            <duration>\(seq.frames(m.source.duration))</duration>
+            \(rate(seq))
+            <start>\(at)</start><end>\(at + len)</end>
+            <in>\(inF)</in><out>\(inF + len)</out>
+            \(fileXML)
+            <sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack>
+            <filter><effect><name>Audio Levels</name><effectid>audiolevels</effectid><effectcategory>audiolevels</effectcategory><effecttype>audiolevels</effecttype><mediatype>audio</mediatype><parameter><parameterid>level</parameterid><name>Level</name><valuemin>0</valuemin><valuemax>3.98109</valuemax><value>\(String(format: "%.5f", m.clip.gain))</value></parameter></effect></filter>
+            </clipitem>
+            """)
+        }
+        let musicTrack = musicItems.isEmpty ? "" : "<track>\n" + musicItems.joined(separator: "\n") + "\n</track>"
+
         return """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE xmeml>
@@ -261,6 +365,7 @@ enum TimelineExport {
         <track>
         \(audioItems.joined(separator: "\n"))
         </track>
+        \(musicTrack)
         </audio>
         </media>
         </sequence>

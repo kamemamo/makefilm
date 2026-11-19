@@ -96,6 +96,8 @@ struct MediaPanel: View {
                     ForEach(editor.media) { m in mediaRow(m) }
                 }
                 .padding(.horizontal, 8)
+                Divider().overlay(Theme.line).padding(.vertical, 8)
+                MusicPanel(editor: editor)
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)

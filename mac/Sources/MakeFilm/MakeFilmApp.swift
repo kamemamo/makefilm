@@ -29,6 +29,8 @@ struct MakeFilmApp: App {
                 .disabled(editor.recentProjects.isEmpty)
                 Divider()
                 Button(L("素材を読み込む…")) { editor.openPanel() }.keyboardShortcut("i")
+                Button(L("音楽を読み込む…")) { editor.openMusicPanel() }.keyboardShortcut("i", modifiers: [.command, .shift])
+                    .disabled(editor.reel.isEmpty)
                 Button(L("書き出し…")) { editor.openExport() }
                     .keyboardShortcut("e")
                     .disabled(!editor.canExport)
@@ -86,7 +88,7 @@ struct ContentView: View {
             Divider().overlay(Theme.line)
             HStack(spacing: 0) {
                 FilmStripView(editor: editor)
-                    .frame(width: 250)
+                    .frame(width: editor.mode == .reel ? 400 : 250)   // the reel gets a sound reel beside it
                     .frame(maxHeight: .infinity)
                     .clipped()
                 Divider().overlay(Theme.line)

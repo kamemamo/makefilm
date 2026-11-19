@@ -27,8 +27,12 @@ final class Editor {
     var exportProgress: Double?
     var showExportSheet = false
     var exportOptions = ExportOptions.load()
-    var undoStack: [[Segment]] = []
-    var redoStack: [[Segment]] = []
+    var undoStack: [EditState] = []
+    var redoStack: [EditState] = []
+    /// The sound reel: audio files and the pieces of them laid along the picture reel (see Music.swift).
+    var musicSources: [AudioSource] = []
+    var music: [MusicClip] = []
+    var selectedMusicID: UUID?
     /// Cuts copied with ⌘C (kept for the session).
     var cutClipboard: [Segment] = []
 
@@ -66,6 +70,7 @@ final class Editor {
     var currentIndex: Int? { media.firstIndex { $0.id == currentMediaID } }
     func clip(_ id: UUID) -> MediaClip? { media.first { $0.id == id } }
     var clipMap: [UUID: MediaClip] { Dictionary(uniqueKeysWithValues: media.map { ($0.id, $0) }) }
+    var sourceMap: [UUID: AudioSource] { Dictionary(uniqueKeysWithValues: musicSources.map { ($0.id, $0) }) }
 
     var segments: [Segment] {
         switch mode {
@@ -139,11 +144,12 @@ final class Editor {
             }
             engine.setItem(AVPlayerItem(asset: m.asset), duration: m.duration, fps: m.fps, at: t)
         case .reel:
-            guard let c = ReelComposition.build(reel, clips: clipMap) else {
+            guard let c = ReelComposition.build(reel, clips: clipMap, music: music, sources: sourceMap) else {
                 engine.setItem(nil, duration: 0, fps: 24, at: 0); return
             }
             let item = AVPlayerItem(asset: c.composition)
             item.videoComposition = c.videoComposition
+            item.audioMix = c.audioMix
             engine.setItem(item, duration: c.duration, fps: c.fps, at: t)
         }
         snap()
@@ -400,24 +406,24 @@ final class Editor {
         }
     }
 
-    private func pushUndo() {
-        undoStack.append(reel)
+    func pushUndo() {
+        undoStack.append(EditState(reel: reel, music: music))
         if undoStack.count > 200 { undoStack.removeFirst() }
         redoStack.removeAll()
     }
 
     func undo() {
         guard let prev = undoStack.popLast() else { return }
-        redoStack.append(reel)
-        reel = prev
+        redoStack.append(EditState(reel: reel, music: music))
+        reel = prev.reel; music = prev.music
         reelChanged(keepingTime: time)
         toast(L("取り消し"))
     }
 
     func redo() {
         guard let next = redoStack.popLast() else { return }
-        undoStack.append(reel)
-        reel = next
+        undoStack.append(EditState(reel: reel, music: music))
+        reel = next.reel; music = next.music
         reelChanged(keepingTime: time)
         toast(L("やり直し"))
     }

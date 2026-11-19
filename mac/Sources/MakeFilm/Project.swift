@@ -18,6 +18,9 @@ struct ProjectFile: Codable {
     var reelTime: Double
     var direction: Int
     var stripFPS: Int
+    /// Sound reel (added in 0.5; absent in older files).
+    var musicSources: [Media]? = nil
+    var music: [MusicClip]? = nil
 
     struct Media: Codable {
         var id: UUID
@@ -34,6 +37,8 @@ struct ProjectCore: Equatable {
     struct M: Equatable { var id: UUID; var path: String; var markIn: Double?; var markOut: Double? }
     var media: [M] = []
     var reel: [Segment] = []
+    var musicSources: [M] = []
+    var music: [MusicClip] = []
 }
 
 extension Editor {
@@ -46,7 +51,9 @@ extension Editor {
 
     func core() -> ProjectCore {
         ProjectCore(media: media.map { .init(id: $0.id, path: $0.url.standardizedFileURL.path, markIn: $0.markIn, markOut: $0.markOut) },
-                    reel: reel)
+                    reel: reel,
+                    musicSources: musicSources.map { .init(id: $0.id, path: $0.url.standardizedFileURL.path, markIn: nil, markOut: nil) },
+                    music: music)
     }
 
     // MARK: new / open / save
@@ -57,6 +64,7 @@ extension Editor {
         thumbs.removeAll()
         envelopes.removeAll()
         media = []; reel = []; undoStack = []; redoStack = []
+        musicSources = []; music = []; selectedMusicID = nil
         currentMediaID = nil; mode = .source; reelTime = 0
         projectURL = nil
         reloadPlayer(at: 0)
@@ -104,6 +112,20 @@ extension Editor {
             loaded.append(clip)
         }
 
+        // the sound reel's audio files, found the same way
+        var loadedAudio: [AudioSource] = []
+        for m in file.musicSources ?? [] {
+            var candidates = [URL(fileURLWithPath: m.path)]
+            if let r = m.relativePath { candidates.append(URL(fileURLWithPath: r, relativeTo: base).standardizedFileURL) }
+            var found = candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+            if found == nil { found = locateMissing(name: (m.path as NSString).lastPathComponent, audio: true) }
+            guard let f = found, let a = try? await AudioSource.load(url: f, id: m.id) else {
+                missing.append((m.path as NSString).lastPathComponent); continue
+            }
+            if f.standardizedFileURL.path != URL(fileURLWithPath: m.path).standardizedFileURL.path { relinked += 1 }
+            loadedAudio.append(a)
+        }
+
         stripFPS = [6, 12, 24].contains(file.stripFPS) ? file.stripFPS : 12
         direction = file.direction >= 0 ? 1 : -1
         thumbs.removeAll()
@@ -112,6 +134,11 @@ extension Editor {
         let ids = Set(loaded.map(\.id))
         media = loaded
         reel = file.reel.filter { ids.contains($0.mediaID) }
+        musicSources = loadedAudio
+        for a in loadedAudio { loadEnvelope(source: a) }
+        let audioIDs = Set(loadedAudio.map(\.id))
+        music = (file.music ?? []).filter { audioIDs.contains($0.sourceID) }
+        selectedMusicID = nil
         undoStack = []; redoStack = []
         currentMediaID = file.currentMediaID.flatMap { ids.contains($0) ? $0 : nil } ?? loaded.first?.id
         mode = (file.mode == "reel" && !reel.isEmpty) ? .reel : .source
@@ -124,7 +151,9 @@ extension Editor {
             savedCore = core()
         } else {
             savedCore = ProjectCore(media: file.media.map { .init(id: $0.id, path: $0.path, markIn: $0.markIn, markOut: $0.markOut) },
-                                    reel: file.reel)
+                                    reel: file.reel,
+                                    musicSources: (file.musicSources ?? []).map { .init(id: $0.id, path: $0.path, markIn: nil, markOut: nil) },
+                                    music: file.music ?? [])
         }
         noteRecent(url)
 
@@ -167,7 +196,12 @@ extension Editor {
             },
             reel: reel, currentMediaID: currentMediaID,
             mode: mode == .reel ? "reel" : "source", reelTime: reelTime,
-            direction: direction, stripFPS: stripFPS)
+            direction: direction, stripFPS: stripFPS,
+            musicSources: musicSources.map { a in
+                .init(id: a.id, path: a.url.standardizedFileURL.path,
+                      relativePath: Self.relativePath(from: base, to: a.url), markIn: nil, markOut: nil, lastTime: 0)
+            },
+            music: music)
         do {
             let enc = JSONEncoder()
             enc.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -200,10 +234,10 @@ extension Editor {
         }
     }
 
-    private func locateMissing(name: String) -> URL? {
+    private func locateMissing(name: String, audio: Bool = false) -> URL? {
         let p = NSOpenPanel()
         p.message = L("素材「%@」が見つかりません。新しい場所を指定してください（キャンセルで外す）", name)
-        p.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
+        p.allowedContentTypes = audio ? [.audio] : [.movie, .video, .mpeg4Movie, .quickTimeMovie]
         p.allowsMultipleSelection = false
         return p.runModal() == .OK ? p.url : nil
     }
@@ -256,8 +290,10 @@ extension Editor {
             return true
         }
         let videos = urls.filter { Self.videoExtensions.contains($0.pathExtension.lowercased()) }
+        let audio = urls.filter { AudioSource.extensions.contains($0.pathExtension.lowercased()) }
         importURLs(videos)
-        return !videos.isEmpty
+        if !audio.isEmpty { importMusic(audio) }
+        return !videos.isEmpty || !audio.isEmpty
     }
 
     // MARK: helpers
