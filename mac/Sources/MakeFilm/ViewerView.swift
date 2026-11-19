@@ -34,8 +34,9 @@ final class PlayerNSView: NSView {
     }
 }
 
-/// The Moviola's viewing hood. The picture is the gate on one continuous piece of 35mm film:
-/// perforations (4 per frame) run down both sides and the neighbouring frames peek out above and below.
+/// The Moviola's viewing hood. The picture is the gate on one continuous piece of 35mm print film,
+/// drawn to real proportions: perforations at both edges (4 per frame), the optical soundtrack beside
+/// the picture, and the neighbouring frames peeking out above and below.
 struct ViewerView: View {
     let editor: Editor
 
@@ -46,9 +47,8 @@ struct ViewerView: View {
                 EmptyStateView(editor: editor)
             } else {
                 GeometryReader { geo in
-                    let L = FilmLayout(available: CGSize(width: geo.size.width - 28, height: geo.size.height - 28),
-                                       aspect: editor.aspect)
-                    ZStack {
+                    let L = FilmLayout(available: CGSize(width: geo.size.width - 28, height: geo.size.height - 28))
+                    ZStack(alignment: .topLeading) {
                         FilmSurroundView(editor: editor, layout: L)
                             .allowsHitTesting(false)
                         ZStack {
@@ -60,9 +60,11 @@ struct ViewerView: View {
                         }
                         .allowsHitTesting(false)
                         .frame(width: L.pic.width, height: L.pic.height)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .offset(x: L.pic.minX, y: L.pic.minY)
                         // scroll anywhere on the film to crank it
                         ScrubOverlay(editor: editor)
+                            .frame(width: L.film.width, height: L.film.height)
                     }
                     .frame(width: L.film.width, height: L.film.height)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -81,34 +83,27 @@ struct ViewerView: View {
     }
 }
 
-/// Proportions of a 35mm frame around the picture.
+/// Size of the film piece shown in the hood: the gate frame plus a little of the frames around it.
 struct FilmLayout {
-    static let railRatio: CGFloat = 0.12    // perforation margin each side, relative to picture width
-    static let peekRatio: CGFloat = 0.30    // how much of the next/previous frame shows, relative to picture height
-    static let gapRatio: CGFloat = 0.05     // frame line between frames
+    static let peek: CGFloat = 0.22          // fraction of a frame pitch showing above and below
 
-    let pic: CGSize
-    let rail: CGFloat
-    let gap: CGFloat
+    let mm: CGFloat                          // pixels per millimetre of film
     let film: CGSize
-    var frameH: CGFloat { pic.height + gap }
+    let pic: CGRect                          // the gate's picture area, in film coordinates
+    var frameH: CGFloat { Film35.pitch * mm }
 
-    init(available: CGSize, aspect: Double) {
-        let a = CGFloat(max(aspect, 0.1))
-        let wByWidth = available.width / (1 + 2 * Self.railRatio)
-        let wByHeight = available.height / (1 + 2 * (Self.peekRatio + Self.gapRatio)) * a
-        let w = max(120, min(wByWidth, wByHeight))
-        pic = CGSize(width: w.rounded(), height: (w / a).rounded())
-        rail = (w * Self.railRatio).rounded()
-        gap = max(4, (pic.height * Self.gapRatio).rounded())
-        film = CGSize(width: pic.width + rail * 2,
-                      height: (pic.height + 2 * (pic.height * Self.peekRatio + gap)).rounded())
+    init(available: CGSize) {
+        let heightMM = Film35.pitch * (1 + 2 * Self.peek)
+        mm = max(3, min(available.width / Film35.width, available.height / heightMM))
+        film = CGSize(width: (Film35.width * mm).rounded(), height: (heightMM * mm).rounded())
+        pic = CGRect(x: (Film35.picX * mm).rounded(), y: ((film.height - Film35.picH * mm) / 2).rounded(),
+                     width: (Film35.picW * mm).rounded(), height: (Film35.picH * mm).rounded())
     }
 }
 
-/// Everything on the film outside the gate: perforations, frame lines, neighbouring frames, edge numbers.
-/// Stopped, the current frame sits squarely in the gate; while running it advances a frame at a time with a quick
-/// pull-down, the way a projector's claw does, so motion stays readable at any speed.
+/// Everything on the film outside the gate: perforations, frame lines, neighbouring frames, edge numbers
+/// and the optical soundtrack. Stopped, the current frame sits squarely in the gate; while running it
+/// advances a frame at a time with a quick pull-down, the way a projector's claw does.
 struct FilmSurroundView: View {
     let editor: Editor
     let layout: FilmLayout
@@ -137,7 +132,7 @@ struct FilmSurroundView: View {
     }
 
     private func draw(_ gc: GraphicsContext, _ size: CGSize, _ tick: Date) {
-        let L = layout
+        let L = layout, mm = L.mm
         let F = Double(editor.stripFPS)
         let dir = CGFloat(editor.direction)
         let d = CGFloat(position())
@@ -145,47 +140,45 @@ struct FilmSurroundView: View {
         let segs = editor.segments
         let D = segs.reduce(0) { $0 + $1.length }
         let total = Int((D * F - 1e-6).rounded(.up))
-        let picX = L.rail
+        let fh = L.frameH
 
         // film base
         gc.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.film))
-        gc.fill(Path(CGRect(x: 3, y: 0, width: 1, height: size.height)), with: .color(.white.opacity(0.05)))
-        gc.fill(Path(CGRect(x: size.width - 4, y: 0, width: 1, height: size.height)), with: .color(.white.opacity(0.05)))
 
-        let fh = L.frameH
         let reach = Int((midY / fh).rounded(.up)) + 1
         let c0 = Int(d.rounded(.down))
-        // 35mm (KS) perforations are wider than tall: about 2.8 × 2.0 mm on a 4.75 mm pitch.
-        var perfH = fh / 4 * 0.42, perfW = perfH * 1.41
-        if perfW > L.rail * 0.6 { perfW = L.rail * 0.6; perfH = perfW / 1.41 }
-        let edge = Font.system(size: max(8, L.rail * 0.13), weight: .semibold, design: .monospaced)
+        let perfW = Film35.perfW * mm, perfH = Film35.perfH * mm, perfR = Film35.perfCorner * mm
+        let edge = Font.system(size: max(8, 1.15 * mm), weight: .semibold, design: .monospaced)
 
         for c in (c0 - reach)...(c0 + reach) {
             let yc = midY - dir * (CGFloat(c) + 0.5 - d) * fh
             let top = yc - fh / 2
             guard top < size.height, top + fh > 0 else { continue }
 
-            // 4 perforations per frame on each side
+            // 4 perforations per frame on each edge (KS, wider than tall)
             for j in 0..<4 {
-                let py = top + (CGFloat(j) + 0.5) * fh / 4 - perfH / 2
-                for x in [(L.rail - perfW) / 2, size.width - L.rail + (L.rail - perfW) / 2] {
-                    gc.fill(Path(roundedRect: CGRect(x: x, y: py, width: perfW, height: perfH), cornerRadius: perfH * 0.28),
+                let py = top + (CGFloat(j) + 0.5) * Film35.perfPitch * mm - perfH / 2
+                for x in [Film35.perfLeftX * mm, Film35.perfRightX * mm] {
+                    gc.fill(Path(roundedRect: CGRect(x: x, y: py, width: perfW, height: perfH), cornerRadius: perfR),
                             with: .color(Color(hex: 0x0F110F)))
                 }
             }
 
             // the picture area of this frame (the gate frame itself is covered by the live picture)
-            let r = CGRect(x: picX, y: yc - L.pic.height / 2, width: L.pic.width, height: L.pic.height)
+            let r = CGRect(x: L.pic.minX, y: top + Film35.picTop * mm, width: L.pic.width, height: L.pic.height)
             if c >= 0 && c < total, let l = locate((Double(c) + 0.5) / F, in: segs) {
                 gc.fill(Path(r), with: .color(.black))
                 let idx = editor.thumbs.index(for: l.src)
                 if let img = editor.thumbs.peek(l.segment.mediaID, idx) ?? editor.thumbs.keepImage(l.segment.mediaID, idx) {
-                    gc.draw(Image(decorative: img, scale: 1).resizable(), in: r)
+                    let s = min(r.width / CGFloat(img.width), r.height / CGFloat(img.height))
+                    let w = CGFloat(img.width) * s, h = CGFloat(img.height) * s
+                    gc.draw(Image(decorative: img, scale: 1).resizable(),
+                            in: CGRect(x: r.midX - w / 2, y: r.midY - h / 2, width: w, height: h))
                 }
-                // edge number for this frame, printed between the perforations and the film edge
+                // edge number, printed outside the perforations
                 let label = Text(TC.feet(Double(c) / F)).font(edge).foregroundStyle(Theme.accent.opacity(0.7))
                 var g = gc
-                g.translateBy(x: L.rail * 0.13, y: yc)
+                g.translateBy(x: Film35.perfLeftX * mm * 0.45, y: yc)
                 g.rotate(by: .degrees(-90))
                 g.draw(label, at: .zero)
             } else {
@@ -193,12 +186,28 @@ struct FilmSurroundView: View {
             }
         }
 
+        // optical soundtrack: two bilateral variable-area tracks beside the picture
+        let tx = Film35.trackX * mm, tw = Film35.trackW * mm
+        gc.fill(Path(CGRect(x: tx, y: 0, width: tw, height: size.height)), with: .color(Color(hex: 0x0B0D0B)))
+        let laneGap = 0.12 * mm, laneW = (tw - laneGap) / 2
+        let step: CGFloat = 2
+        let span = Double(step / fh) / F
+        for lane in 0..<2 {
+            let cx = tx + laneW / 2 + CGFloat(lane) * (laneW + laneGap)
+            let path = soundtrackPath(centerX: cx, halfWidth: laneW / 2 * 0.95, y0: 0, y1: size.height, step: step) { y in
+                let u = Double(d) - Double((y - midY) / (dir * fh))     // film position in cells at this y
+                let t = u / F
+                return editor.soundLevel(lane: lane, from: t - span / 2, to: t + span / 2) ?? 0
+            }
+            gc.fill(Path(path), with: .color(Color(hex: 0xEDE6D3).opacity(0.92)))
+        }
+
         // the neighbouring frames sink into the dark of the hood
         let fade = (size.height - L.pic.height) / 2
         for (from, to) in [(CGFloat(0), fade), (size.height, size.height - fade)] {
             gc.fill(Path(CGRect(x: 0, y: min(from, to), width: size.width, height: abs(to - from))),
-                    with: .linearGradient(Gradient(stops: [.init(color: Color(hex: 0x1D231C).opacity(0.92), location: 0),
-                                                           .init(color: Color(hex: 0x1D231C).opacity(0.35), location: 0.75),
+                    with: .linearGradient(Gradient(stops: [.init(color: Color(hex: 0x1D231C).opacity(0.85), location: 0),
+                                                           .init(color: Color(hex: 0x1D231C).opacity(0.3), location: 0.7),
                                                            .init(color: .clear, location: 1)]),
                                           startPoint: CGPoint(x: 0, y: from), endPoint: CGPoint(x: 0, y: to)))
         }

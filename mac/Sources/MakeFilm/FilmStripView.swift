@@ -74,14 +74,17 @@ final class FilmStripNSView: NSView {
         let D = segs.reduce(0) { $0 + $1.length }
         let F = Double(ed.stripFPS)
         let dir = CGFloat(ed.direction)
-        let asp = CGFloat(ed.aspect)
+        // real 35mm print proportions (see Film35): 4-perf frames, Academy picture, optical soundtrack
         let filmW = min(W - 80, 180)
         let fx = (36 + max(0, (W - 80 - filmW) / 2)).rounded()
-        let perfM = filmW * 0.15, imgW = filmW - perfM * 2, imgH = imgW / asp
-        let gap = max(5, imgH * 0.07)
-        cellH = imgH + gap
+        let mm = filmW / Film35.width
+        cellH = Film35.pitch * mm
+        let picX = fx + Film35.picX * mm, picW = Film35.picW * mm, picH = Film35.picH * mm
         gateY = (H / 2).rounded()
-        let p = ed.time * F
+        // Follow the hand while cranking or playing; at rest, park the frame squarely in the gate.
+        let rawP = ed.time * F
+        let atRest = ed.speed == 0 && !ed.dragging && ed.fling == 0 && CACurrentMediaTime() - ed.lastCrankAt > 0.25
+        let p = atRest ? (rawP + 1e-6).rounded(.down) + 0.5 : rawP
         let totalFrames = Int((D * F - 1e-6).rounded(.up))
         let yOf: (Double) -> CGFloat = { [cellH, gateY] t in gateY - dir * CGFloat(t * F - p) * cellH }
         let thumbs = ed.thumbs
@@ -97,9 +100,7 @@ final class FilmStripNSView: NSView {
         let kc = Int(p.rounded(.down))
         let ahead = ed.speed == 0 ? 0 : (ed.speed > 0 ? 1 : -1)
         var bestD = Double.infinity
-        // landscape KS perforations, ~1.41 : 1
-        var ph = cellH / 4 * 0.42, pw = ph * 1.41
-        if pw > perfM * 0.6 { pw = perfM * 0.6; ph = pw / 1.41 }
+        let ph = Film35.perfH * mm, pw = Film35.perfW * mm, pr = Film35.perfCorner * mm
         let rulerAttrs: [NSAttributedString.Key: Any] = [.font: Self.monoFont, .foregroundColor: NSColor(white: 0.5, alpha: 1)]
 
         for k in (kc - half - pre)...(kc + half + pre) {
@@ -120,15 +121,15 @@ final class FilmStripNSView: NSView {
             // perforations: 4 per frame each side (35mm)
             ctx.setFillColor(.hex(0x0F110F))
             for j in 0..<4 {
-                let py = y0 + (CGFloat(j) + 0.5) * cellH / 4 - ph / 2
-                ctx.addPath(CGPath(roundedRect: CGRect(x: fx + (perfM - pw) / 2, y: py, width: pw, height: ph),
-                                   cornerWidth: ph * 0.28, cornerHeight: ph * 0.28, transform: nil))
-                ctx.addPath(CGPath(roundedRect: CGRect(x: fx + filmW - perfM + (perfM - pw) / 2, y: py, width: pw, height: ph),
-                                   cornerWidth: ph * 0.28, cornerHeight: ph * 0.28, transform: nil))
+                let py = y0 + (CGFloat(j) + 0.5) * Film35.perfPitch * mm - ph / 2
+                ctx.addPath(CGPath(roundedRect: CGRect(x: fx + Film35.perfLeftX * mm, y: py, width: pw, height: ph),
+                                   cornerWidth: pr, cornerHeight: pr, transform: nil))
+                ctx.addPath(CGPath(roundedRect: CGRect(x: fx + Film35.perfRightX * mm, y: py, width: pw, height: ph),
+                                   cornerWidth: pr, cornerHeight: pr, transform: nil))
             }
             ctx.fillPath()
 
-            let frame = CGRect(x: fx + perfM, y: y0 + gap / 2, width: imgW, height: imgH)
+            let frame = CGRect(x: picX, y: y0 + Film35.picTop * mm, width: picW, height: picH)
             if inRange, let l = locate((Double(k) + 0.5) / F, in: segs) {
                 let idx = thumbs.index(for: l.src)
                 let d = abs(Double(k) + 0.5 - p)
@@ -159,6 +160,25 @@ final class FilmStripNSView: NSView {
             }
         }
         thumbs.endFrame()
+
+        // optical soundtrack: two bilateral variable-area tracks between the left perfs and the picture
+        do {
+            let tx = fx + Film35.trackX * mm, tw = Film35.trackW * mm
+            ctx.setFillColor(.hex(0x0B0D0B)); ctx.fill(CGRect(x: tx, y: 0, width: tw, height: H))
+            let laneGap = 0.12 * mm, laneW = (tw - laneGap) / 2
+            let step: CGFloat = 2
+            let span = Double(step / cellH) / F                  // seconds covered by one step
+            let timeAt: (CGFloat) -> Double = { [cellH, gateY] y in (p - Double((y - gateY) / (dir * cellH))) / F }
+            ctx.setFillColor(.hex(0xEDE6D3, 0.92))
+            for lane in 0..<2 {
+                let cx = tx + laneW / 2 + CGFloat(lane) * (laneW + laneGap)
+                let path = soundtrackPath(centerX: cx, halfWidth: laneW / 2 * 0.95, y0: 0, y1: H, step: step) { y in
+                    let t = timeAt(y)
+                    return ed.soundLevel(lane: lane, from: t - span / 2, to: t + span / 2) ?? 0
+                }
+                ctx.addPath(path); ctx.fillPath()
+            }
+        }
 
         if D > 0 {   // head and tail of the material
             ctx.setFillColor(.hex(0xE3A548, 0.6))
@@ -246,8 +266,8 @@ final class FilmStripNSView: NSView {
             ctx.restoreGState()
         }
         let c: CGFloat = 10
-        let g0 = CGPoint(x: fx + perfM - 4, y: gateY - imgH / 2 - 4)
-        let g1 = CGPoint(x: fx + perfM + imgW + 4, y: gateY + imgH / 2 + 4)
+        let g0 = CGPoint(x: picX - 4, y: gateY - picH / 2 - 4)
+        let g1 = CGPoint(x: picX + picW + 4, y: gateY + picH / 2 + 4)
         ctx.setStrokeColor(.hex(0xE3A548)); ctx.setLineWidth(2); ctx.setLineCap(.butt)
         ctx.addLines(between: [CGPoint(x: g0.x, y: g0.y + c), g0, CGPoint(x: g0.x + c, y: g0.y)])
         ctx.addLines(between: [CGPoint(x: g1.x - c, y: g0.y), CGPoint(x: g1.x, y: g0.y), CGPoint(x: g1.x, y: g0.y + c)])

@@ -42,8 +42,12 @@ final class Editor {
     // MARK: per-frame state (not observed)
     @ObservationIgnored let engine = PlaybackEngine()
     @ObservationIgnored let thumbs = ThumbnailStore()
+    /// Audio peaks per clip for the optical soundtrack (filled in the background).
+    @ObservationIgnored var envelopes: [UUID: AudioEnvelope] = [:]
     @ObservationIgnored var dragging = false
     @ObservationIgnored var fling: Double = 0
+    /// When the film was last cranked by hand (drag / scroll), for drawing it continuously meanwhile.
+    @ObservationIgnored var lastCrankAt: CFTimeInterval = 0
     @ObservationIgnored private var lastTick: CFTimeInterval = 0
     @ObservationIgnored private var manualSpeed: Double = 0
     @ObservationIgnored var reelTime: Double = 0
@@ -103,6 +107,7 @@ final class Editor {
                     let m = try await MediaClip.load(url: url)
                     media.append(m)
                     thumbs.register(m)
+                    loadEnvelope(for: m)
                     select(m.id)
                 } catch {
                     toast(L("読み込めませんでした: %@", url.lastPathComponent))
@@ -213,6 +218,7 @@ final class Editor {
     }
 
     func scrub(by delta: Double) {
+        lastCrankAt = CACurrentMediaTime()
         if speed != 0 { stop() }
         engine.scrub(to: time + delta)
     }

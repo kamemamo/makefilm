@@ -55,6 +55,7 @@ extension Editor {
         guard confirmDiscardIfNeeded() else { return }
         stop()
         thumbs.removeAll()
+        envelopes.removeAll()
         media = []; reel = []; undoStack = []; redoStack = []
         currentMediaID = nil; mode = .source; reelTime = 0
         projectURL = nil
@@ -106,7 +107,8 @@ extension Editor {
         stripFPS = [6, 12, 24].contains(file.stripFPS) ? file.stripFPS : 12
         direction = file.direction >= 0 ? 1 : -1
         thumbs.removeAll()
-        for c in loaded { thumbs.register(c) }
+        envelopes.removeAll()
+        for c in loaded { thumbs.register(c); loadEnvelope(for: c) }
         let ids = Set(loaded.map(\.id))
         media = loaded
         reel = file.reel.filter { ids.contains($0.mediaID) }
