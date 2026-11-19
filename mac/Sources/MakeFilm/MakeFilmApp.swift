@@ -37,6 +37,12 @@ struct MakeFilmApp: App {
                 Button(L("保存")) { editor.saveProject() }.keyboardShortcut("s")
                 Button(L("別名で保存…")) { editor.saveProjectAs() }.keyboardShortcut("s", modifiers: [.command, .shift])
             }
+            CommandGroup(replacing: .pasteboard) {
+                Button(L("カットをコピー")) { editor.copyCut() }.keyboardShortcut("c")
+                    .disabled(editor.media.isEmpty)
+                Button(L("カットを貼り付け")) { editor.pasteCut() }.keyboardShortcut("v")
+                    .disabled(editor.cutClipboard.isEmpty)
+            }
             CommandGroup(replacing: .undoRedo) {
                 Button(L("取り消し")) { editor.undo() }.keyboardShortcut("z")
                     .disabled(editor.undoStack.isEmpty)

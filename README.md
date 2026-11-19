@@ -11,7 +11,7 @@ When the cut is done, hand it over to Final Cut Pro, Premiere Pro or DaVinci Res
 - **Vertical film strip** — the strip on the left has perforations (4 per frame), a seconds ruler and grease-pencil IN/OUT marks. Drag or scroll to crank it, with inertia. The film can run up (default) or down (Moviola style)
 - **The viewer is a gate** — the picture sits on a continuous strip of film, with the previous and next frames above and below, perforations and edge numbers at the sides. While playing, the film advances a frame at a time like a projector's claw
 - **Pedal** — speeds from −4× to 4×, true reverse playback and frame-accurate stepping (native AVFoundation playback)
-- **Splicing and the trim bin** — mark IN/OUT and splice; each cut hangs in the bin at a length proportional to its duration. Drag to reorder, cut and lift at the gate, undo/redo
+- **Splicing and the trim bin** — mark IN/OUT and splice; each cut hangs in the bin at a length proportional to its duration. Drag to reorder (⌥-drag to duplicate), copy/paste cuts, cut and lift at the gate, undo/redo
 - **Projects** — `.makefilm` files store the source locations, IN/OUT marks, the reel and view settings. Open Recent, reopens the last project at launch, asks before discarding unsaved changes. Moved sources are found relative to the project file, or you can point to their new location
 - **English and Japanese** — follows the macOS language (English on any non-Japanese system)
 - **Export**
@@ -57,6 +57,8 @@ During development you can also use `cd mac && swift run MakeFilm ../samples/sam
 | C | Cut the film at the gate (reel) |
 | X / Delete | Lift the cut at the gate (reel) |
 | 1 / 2 | Source / reel view |
+| ⌘C / ⌘V | Copy / paste a cut (reel: the cut at the gate, pasted right after it; Source: the IN–OUT range, pasted at the end of the reel) |
+| ⌥-drag in the trim bin | Duplicate a cut instead of moving it |
 | ⌘N / ⌘O / ⌘S / ⇧⌘S | New project / open / save / save as |
 | ⌘I / ⌘E / ⌘Z | Import clips / export / undo |
 

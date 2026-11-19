@@ -29,6 +29,8 @@ final class Editor {
     var exportOptions = ExportOptions.load()
     var undoStack: [[Segment]] = []
     var redoStack: [[Segment]] = []
+    /// Cuts copied with ⌘C (kept for the session).
+    var cutClipboard: [Segment] = []
 
     // MARK: project (see Project.swift)
     var projectURL: URL?
@@ -320,6 +322,58 @@ final class Editor {
             reel.append(s)
         }
         reelChanged(keepingTime: time)
+    }
+
+    /// Trim-bin drop: moves the cut, or copies it when ⌥ is held (as in Finder).
+    func dropCut(_ id: UUID, before targetID: UUID?) {
+        if NSEvent.modifierFlags.contains(.option) { duplicate(id, before: targetID) } else { move(id, before: targetID) }
+    }
+
+    /// Insert a copy of a segment before `targetID` (or at the end) — ⌥-drag in the trim bin.
+    func duplicate(_ id: UUID, before targetID: UUID?) {
+        guard let from = reel.firstIndex(where: { $0.id == id }) else { return }
+        var copy = reel[from]; copy.id = UUID()
+        pushUndo()
+        let to = targetID.flatMap { t in reel.firstIndex(where: { $0.id == t }) } ?? reel.count
+        reel.insert(copy, at: to)
+        reelChanged(keepingTime: time)
+        toast(L("#%ld を #%ld として複製しました", from + 1, to + 1))
+    }
+
+    /// ⌘C: in the reel, the cut at the gate; in Source, the IN–OUT range (or the whole clip).
+    func copyCut() {
+        switch mode {
+        case .reel:
+            guard let l = locate(time, in: reel) else { toast(L("コピーできるカットがありません")); return }
+            cutClipboard = [l.segment]
+            toast(L("#%ld をコピーしました", l.index + 1))
+        case .source:
+            guard let m = currentMedia else { toast(L("コピーできるカットがありません")); return }
+            let a = m.markIn ?? 0, b = m.markOut ?? m.duration
+            guard b - a >= 1 / m.fps * 0.99 else { toast(L("IN と OUT の間が短すぎます")); return }
+            cutClipboard = [Segment(mediaID: m.id, start: a, end: b)]
+            toast(L("IN〜OUT をコピーしました"))
+        }
+    }
+
+    /// ⌘V: in the reel, insert right after the cut at the gate and park on it; in Source, append to the reel.
+    func pasteCut() {
+        let items = cutClipboard.filter { clip($0.mediaID) != nil }.map { s -> Segment in
+            var c = s; c.id = UUID(); return c
+        }
+        guard !items.isEmpty else { return }
+        pushUndo()
+        if mode == .reel, let l = locate(time, in: reel) {
+            let at = l.index + 1
+            reel.insert(contentsOf: items, at: at)
+            let start = reel.prefix(at).reduce(0) { $0 + $1.length }
+            reelChanged(keepingTime: start + 0.5 / engine.fps)
+            toast(L("#%ld に貼り付けました", at + 1))
+        } else {
+            reel.append(contentsOf: items)
+            if mode == .reel { reelChanged(keepingTime: time) }
+            toast(L("リールの最後に貼り付けました（#%ld）", reel.count))
+        }
     }
 
     func jumpToSegment(_ index: Int) {

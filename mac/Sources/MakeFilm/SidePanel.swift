@@ -49,7 +49,7 @@ struct TrimBinView: View {
                 .padding(.horizontal, 10)
 
             if editor.reel.isEmpty {
-                Text(L("素材で I・O を付けて Return（スプライス）すると、ここに吊るされます。ドラッグで並べ替え、ホイールで左右にスクロール。"))
+                Text(L("素材で I・O を付けて Return（スプライス）すると、ここに吊るされます。ドラッグで並べ替え（⌥ を押しながらで複製）、⌘C / ⌘V でコピーと貼り付け、ホイールで左右にスクロール。"))
                     .font(.system(size: 12)).foregroundStyle(Theme.muted)
                     .padding(14)
                 Spacer(minLength: 0)
@@ -70,7 +70,7 @@ struct TrimBinView: View {
                                 .contentShape(Rectangle())
                                 .dropDestination(for: String.self) { items, _ in
                                     guard let s = items.first, let id = UUID(uuidString: s) else { return false }
-                                    editor.move(id, before: nil); return true
+                                    editor.dropCut(id, before: nil); return true
                                 }
                         }
                         .padding(.horizontal, 10)
@@ -157,7 +157,18 @@ struct ClipCard: View {
             .background(FilmEdge())
             .overlay(RoundedRectangle(cornerRadius: 2).stroke(on ? Theme.accent : .clear, lineWidth: 2).padding(-2))
             .overlay(alignment: .leading) {
-                if targeted { Rectangle().fill(Theme.accent).frame(width: 3).offset(x: -7) }
+                if targeted {
+                    // ⌥ held: the drop makes a copy
+                    let copying = NSEvent.modifierFlags.contains(.option)
+                    ZStack(alignment: .top) {
+                        Rectangle().fill(copying ? Color(hex: 0x7BC47F) : Theme.accent).frame(width: 3)
+                        if copying {
+                            Text("+").font(.system(size: 12, weight: .heavy)).foregroundStyle(Color(hex: 0x7BC47F))
+                                .offset(y: -16)
+                        }
+                    }
+                    .offset(x: -7)
+                }
             }
             .padding(.top, -2)
 
@@ -182,7 +193,7 @@ struct ClipCard: View {
         }
         .dropDestination(for: String.self) { items, _ in
             guard let s = items.first, let id = UUID(uuidString: s) else { return false }
-            editor.move(id, before: segment.id); return true
+            editor.dropCut(id, before: segment.id); return true
         } isTargeted: { targeted = $0 }
     }
 }
