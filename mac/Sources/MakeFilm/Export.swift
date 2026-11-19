@@ -6,9 +6,15 @@ import ImageIO
 // MARK: - options
 
 enum ExportFormat: String, CaseIterable, Identifiable, Codable {
-    case h264, hevc, prores422, prores4444, audio, still
+    case h264, hevc, prores422, prores4444, audio, still, fcpxml, premiere
 
     var id: String { rawValue }
+
+    /// Rendered media files.
+    static let mediaFormats: [ExportFormat] = [.h264, .hevc, .prores422, .prores4444, .audio, .still]
+    /// Edit decisions that reference the original files, for finishing in another editor.
+    static let timelineFormats: [ExportFormat] = [.fcpxml, .premiere]
+    var isTimeline: Bool { self == .fcpxml || self == .premiere }
 
     var title: String {
         switch self {
@@ -18,6 +24,8 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case .prores4444: return "Apple ProRes 4444（MOV）"
         case .audio: return "音声のみ（AAC・M4A）"
         case .still: return "静止画（PNG）"
+        case .fcpxml: return "Final Cut Pro（FCPXML）"
+        case .premiere: return "Premiere Pro（XML）"
         }
     }
 
@@ -29,6 +37,8 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case .prores4444: return "422 より色情報が多い最高画質のマスター用。ファイルは大きい"
         case .audio: return "映像を捨てて音だけを書き出す"
         case .still: return "ゲートにある今のコマを 1 枚の画像に"
+        case .fcpxml: return "カットの並びと IN/OUT をそのまま渡す。DaVinci Resolve でも読める"
+        case .premiere: return "Premiere Pro 用のタイムライン。DaVinci Resolve でも読める"
         }
     }
 
@@ -38,6 +48,8 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case .hevc, .prores422, .prores4444: return "mov"
         case .audio: return "m4a"
         case .still: return "png"
+        case .fcpxml: return "fcpxml"
+        case .premiere: return "xml"
         }
     }
 
@@ -54,11 +66,13 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case .h264: return .mpeg4Movie
         case .audio: return .mpeg4Audio
         case .still: return .png
+        case .fcpxml: return UTType(filenameExtension: "fcpxml", conformingTo: .xml) ?? .xml
+        case .premiere: return .xml
         default: return .quickTimeMovie
         }
     }
 
-    var isMovie: Bool { self != .audio && self != .still }
+    var isMovie: Bool { !isTimeline && self != .audio && self != .still }
 
     /// Sizes this format can be scaled to (ProRes / audio / still keep the original).
     var resolutions: [ExportResolution] {
@@ -81,7 +95,7 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case (.prores422, _): return AVAssetExportPresetAppleProRes422LPCM
         case (.prores4444, _): return AVAssetExportPresetAppleProRes4444LPCM
         case (.audio, _): return AVAssetExportPresetAppleM4A
-        case (.still, _): return AVAssetExportPresetPassthrough
+        case (.still, _), (.fcpxml, _), (.premiere, _): return AVAssetExportPresetPassthrough
         }
     }
 
@@ -93,6 +107,8 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case .prores4444: return "_ProRes4444"
         case .audio: return "_音声"
         case .still: return "_コマ"
+        case .fcpxml: return "_FinalCut"
+        case .premiere: return "_Premiere"
         }
     }
 }
@@ -170,6 +186,7 @@ extension Editor {
         o.save()
         showExportSheet = false
         if o.format == .still { exportStill(); return }
+        if o.format.isTimeline { exportTimeline(o); return }
 
         let segs = exportSegments(o.target)
         guard !segs.isEmpty, let c = ReelComposition.build(segs, clips: clipMap) else {
@@ -229,6 +246,34 @@ extension Editor {
         if o.format == .still { name += "_" + TC.string(time, fps: engine.fps).replacingOccurrences(of: ":", with: "-") }
         if let box = o.resolution.box, o.format.resolutions.contains(o.resolution) { name += "_\(Int(box.height))p" }
         return name
+    }
+
+    /// Write an FCPXML / Premiere XML that rebuilds the cut from the original files.
+    func exportTimeline(_ o: ExportOptions) {
+        let segs = exportSegments(o.target)
+        guard !segs.isEmpty else { toast("書き出すフィルムがありません"); return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [o.format.utType]
+        panel.nameFieldStringValue = defaultExportName(o) + "." + o.format.ext
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let seqName = (url.lastPathComponent as NSString).deletingPathExtension
+        let used = Set(segs.map(\.mediaID)).compactMap { clip($0) }
+
+        Task {
+            var clips: [UUID: TimelineClip] = [:]
+            for m in used { clips[m.id] = await TimelineClip.gather(m) }
+            let xml = o.format == .fcpxml
+                ? TimelineExport.fcpxml(name: seqName, segments: segs, clips: clips)
+                : TimelineExport.xmeml(name: seqName, segments: segs, clips: clips)
+            do {
+                guard let xml else { throw LoadError(message: "タイムラインを作れませんでした") }
+                try xml.write(to: url, atomically: true, encoding: .utf8)
+                toast("書き出しました: \(url.lastPathComponent)（\(segs.count) カット）")
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch {
+                toast("書き出しに失敗しました: \(error.localizedDescription)")
+            }
+        }
     }
 
     /// Save the frame currently in the gate as a PNG.
@@ -301,8 +346,11 @@ struct ExportSheet: View {
 
             // format
             VStack(alignment: .leading, spacing: 6) {
-                label("形式")
-                ForEach(ExportFormat.allCases) { f in formatRow(f) }
+                label("ファイルとして書き出す")
+                ForEach(ExportFormat.mediaFormats) { f in formatRow(f) }
+                label("編集ソフトで続ける（元の素材を参照するタイムライン）")
+                    .padding(.top, 8)
+                ForEach(ExportFormat.timelineFormats) { f in formatRow(f) }
             }
 
             // size
@@ -355,6 +403,7 @@ struct ExportSheet: View {
         let segs = editor.exportSegments(o.target)
         let dur = segs.reduce(0) { $0 + $1.length }
         var parts = [TC.string(dur, fps: 24), "\(segs.count) カット"]
+        if o.format.isTimeline { parts.append("素材を参照（再エンコードなし）") }
         if o.format.isMovie, let first = segs.first.flatMap({ editor.clip($0.mediaID) }) {
             var size = first.displaySize
             if let box = o.resolution.box, o.format.resolutions.contains(o.resolution) {
@@ -383,7 +432,7 @@ struct ExportSheet: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10).padding(.vertical, 7)
+        .padding(.horizontal, 10).padding(.vertical, 5)
         .background(RoundedRectangle(cornerRadius: 8).fill(on ? Theme.panel2 : .clear))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(on ? Theme.accent.opacity(0.7) : Theme.line, lineWidth: 1))
         .contentShape(Rectangle())
