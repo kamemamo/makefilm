@@ -131,6 +131,10 @@ struct TransportBar: View {
                 HStack(spacing: 6) {
                     Button { editor.cutAtGate() } label: { HStack(spacing: 4) { Text(L("切る")); Kbd("C") } }
                         .help(L("ゲート位置でフィルムを切る"))
+                    if !editor.music.isEmpty {
+                        Button { editor.splitMusicAtGate() } label: { HStack(spacing: 4) { Text(L("曲を切る")); Kbd("⇧C") } }
+                            .help(L("ゲートの位置で曲を 2 つに分ける"))
+                    }
                     Button { editor.liftAtGate() } label: { HStack(spacing: 4) { Text(L("外す")); Kbd("X") } }
                         .help(L("ゲート位置のカットをリールから外す"))
                     Button { editor.undo() } label: { HStack(spacing: 4) { Text(L("取り消し")); Kbd("⌘Z") } }

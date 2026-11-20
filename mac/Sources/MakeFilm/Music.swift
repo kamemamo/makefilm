@@ -171,6 +171,47 @@ extension Editor {
         }
     }
 
+    /// The music clip to work on at the gate: the selected one if the gate is inside it, else whatever is under the gate.
+    private func musicAtGate() -> MusicClip? {
+        let t = time
+        if let s = selectedMusic, t > s.at, t < s.endAt { return s }
+        return musicClip(atReel: t)
+    }
+
+    /// ⇧C: cut the music in two at the gate, like the splicer does to the picture.
+    /// The fade-in stays on the first piece and the fade-out on the second; the second piece is selected.
+    func splitMusicAtGate() {
+        guard mode == .reel else { return }
+        stop()
+        let t = time
+        guard let c = musicAtGate() else { toast(L("ゲートの位置に曲がありません")); return }
+        let minLen = 1 / engine.fps
+        guard t - c.at >= minLen, c.endAt - t >= minLen else { toast(L("曲の端に近すぎます")); return }
+        guard let i = music.firstIndex(where: { $0.id == c.id }) else { return }
+        pushUndo()
+        var a = c, b = c
+        a.end = c.start + (t - c.at)
+        a.fadeOut = 0
+        a.fadeIn = min(a.fadeIn, a.length / 2)
+        b.id = UUID()
+        b.start = a.end
+        b.at = t
+        b.fadeIn = 0
+        b.fadeOut = min(b.fadeOut, b.length / 2)
+        music.replaceSubrange(i...i, with: [a, b])
+        music.sort { $0.at < $1.at }
+        selectedMusicID = b.id
+        musicChanged()
+        toast(L("ゲートで曲を切りました"))
+    }
+
+    /// ⇧X: take the music at the gate (or, if there is none, the selected music) off the sound reel.
+    func removeMusicAtGate() {
+        guard mode == .reel else { return }
+        guard let c = musicAtGate() ?? selectedMusic else { toast(L("ゲートの位置に曲がありません")); return }
+        removeMusic(c.id)
+    }
+
     func removeMusic(_ id: UUID) {
         guard music.contains(where: { $0.id == id }) else { return }
         pushUndo()
@@ -279,17 +320,22 @@ struct MusicPanel: View {
                 fadeMenu(L("イン"), c.fadeIn) { editor.setMusicFade(c.id, fadeIn: $0) }
                 fadeMenu(L("アウト"), c.fadeOut) { editor.setMusicFade(c.id, fadeOut: $0) }
             }
+            // cut / remove, then the trims — at most two buttons per row so the panel never clips them
             HStack(spacing: 6) {
-                Button(L("頭をゲートへ")) { editor.musicAtGateToStart(c.id) }
-                    .help(L("曲の頭がゲートの位置から始まるように動かす"))
+                Button { editor.selectedMusicID = c.id; editor.splitMusicAtGate() } label: {
+                    HStack(spacing: 4) { Text(L("ゲートで切る")); Kbd("⇧C") }
+                }
+                .help(L("ゲートの位置で曲を 2 つに分ける"))
+                Button { editor.removeMusic(c.id) } label: { HStack(spacing: 4) { Text(L("外す")); Kbd("⇧X") } }
+            }
+            HStack(spacing: 6) {
                 Button(L("ゲートで頭を切る")) { editor.trimMusicHead(c.id) }
                     .help(L("ゲートより前の部分を切り落とす"))
-            }
-            HStack(spacing: 6) {
                 Button(L("ゲートで終わりを切る")) { editor.trimMusicTail(c.id) }
                     .help(L("ゲートより後の部分を切り落とす"))
-                Button(L("外す")) { editor.removeMusic(c.id) }
             }
+            Button(L("頭をゲートへ")) { editor.musicAtGateToStart(c.id) }
+                .help(L("曲の頭がゲートの位置から始まるように動かす"))
         }
         .buttonStyle(FilmButtonStyle(compact: true))
         .font(.system(size: 12))

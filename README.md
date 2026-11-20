@@ -14,7 +14,7 @@ When the cut is done, hand it over to Final Cut Pro, Premiere Pro or DaVinci Res
 - **Pedal** — speeds from −4× to 4×, true reverse playback and frame-accurate stepping (native AVFoundation playback)
 - **Scratch while cranking** — drag, scroll or fling the film and the sound follows your hand sample by sample, forwards and backwards, pitch rising with speed — like rocking film over a Moviola sound head or scratching a record (toggle in the View menu)
 - **Splicing and the trim bin** — mark IN/OUT and splice; each cut hangs in the bin at a length proportional to its duration. Drag to reorder (⌥-drag to duplicate), copy/paste cuts, cut and lift at the gate, undo/redo
-- **Sound reel** — in the reel view magnetic sound tape runs right beside the picture, in sync, like on an editing Moviola. Lay music (mp3, m4a, wav…) at the gate — even before there is any picture, to cut the picture to the music — drag it on the sound reel to slide it against the picture, set its volume and fades, trim its head or tail at the gate. The music is mixed into playback and exports, and handed to Final Cut Pro (connected clips, music role) and Premiere Pro (a separate audio track)
+- **Sound reel** — in the reel view magnetic sound tape runs right beside the picture, in sync, like on an editing Moviola. Lay music (mp3, m4a, wav…) at the gate — even before there is any picture, to cut the picture to the music — drag it on the sound reel to slide it against the picture, set its volume and fades, cut it in two at the gate (⇧C), remove pieces (⇧X) or trim its head or tail at the gate. The music is mixed into playback and exports, and handed to Final Cut Pro (connected clips, music role) and Premiere Pro (a separate audio track)
 - **Projects** — `.makefilm` files store the source locations, IN/OUT marks, the reel and view settings. Open Recent, reopens the last project at launch, asks before discarding unsaved changes. Moved sources are found relative to the project file, or you can point to their new location
 - **English and Japanese** — follows the macOS language (English on any non-Japanese system)
 - **Export**
@@ -59,6 +59,7 @@ During development you can also use `cd mac && swift run MakeFilm ../samples/sam
 | Return | Splice (add IN–OUT to the end of the reel) |
 | C | Cut the film at the gate (reel) |
 | X / Delete | Lift the cut at the gate (reel) |
+| ⇧C / ⇧X | Cut the music at the gate / remove the music at the gate (sound reel) |
 | 1 / 2 | Source / reel view |
 | ⌘C / ⌘V | Copy / paste a cut (reel: the cut at the gate, pasted right after it; Source: the IN–OUT range, pasted at the end of the reel) |
 | ⌥-drag in the trim bin | Duplicate a cut instead of moving it |

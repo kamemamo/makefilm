@@ -519,6 +519,11 @@ final class Editor {
         case 119: end(); return true
         default: break
         }
+        // ⇧C / ⇧X work on the sound reel, C / X on the picture
+        if shift, let ch = e.charactersIgnoringModifiers?.lowercased() {
+            if ch == "c" { splitMusicAtGate(); return true }
+            if ch == "x" { removeMusicAtGate(); return true }
+        }
         switch e.charactersIgnoringModifiers?.lowercased() {
         case "j": setSpeed(speed >= 0 ? -1 : max(speed * 2, -4))
         case "k": stop()
