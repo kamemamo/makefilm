@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import QuartzCore
 
 /// 35mm film geometry in millimetres: frames spaced as 3-perf pull-down (pictures almost edge to edge),
 /// optical soundtrack. `perforated` = false leaves the perforations off: the soundtrack widens into
@@ -37,6 +38,26 @@ struct FilmGeometry {
     var picW: CGFloat { Film35.perforated ? 21.0 : picH * aspect }
     var picX: CGFloat { Film35.perforated ? 7.8 : Film35.trackX + Film35.trackW + 0.85 }
     var width: CGFloat { Film35.perforated ? 35 : picX + picW + Film35.frameLine }
+}
+
+/// Eases the film into the gate when it comes to rest, instead of jumping the last fraction of a
+/// frame. While the film is moving it follows exactly; at rest it glides to the frame's centre
+/// (about 0.15 s), like a film settling on the register pin. Far jumps (a click elsewhere) cut.
+@MainActor
+final class GateSettle {
+    private var shown: Double?
+    private var lastT: CFTimeInterval = 0
+    static let tau = 0.045                       // seconds; ~0.15 s to settle
+
+    /// `target`: where the film should be (cells); `moving`: the hand or the motor is driving it.
+    func position(target: Double, moving: Bool, now: CFTimeInterval = CACurrentMediaTime()) -> Double {
+        let dt = lastT == 0 ? 0 : min(now - lastT, 0.1)
+        lastT = now
+        guard let s = shown, !moving, abs(target - s) < 3 else { shown = target; return target }
+        let next = s + (target - s) * (1 - exp(-dt / Self.tau))
+        shown = abs(target - next) < 0.002 ? target : next
+        return shown!
+    }
 }
 
 /// Peak levels of a clip's audio, used to draw the variable-area soundtrack and the sound reel.

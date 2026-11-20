@@ -21,6 +21,7 @@ final class FilmStripNSView: NSView {
     weak var editor: Editor?
     var overview = false
     private var link: CADisplayLink?
+    private let settle = MainActor.assumeIsolated { GateSettle() }
 
     // geometry from the last draw, used for hit-testing
     private var cellH: CGFloat = 60
@@ -117,7 +118,10 @@ final class FilmStripNSView: NSView {
         // Follow the hand while cranking or playing; at rest, park the frame squarely in the gate.
         let rawP = ed.time * F
         let atRest = ed.speed == 0 && !ed.dragging && ed.fling == 0 && CACurrentMediaTime() - ed.lastCrankAt > 0.25
-        let p = atRest ? (rawP + 1e-6).rounded(.down) + 0.5 : rawP
+        // Dragged or running, the film follows exactly. Otherwise (coming to rest, snapping to a frame,
+        // stepping, between scroll-wheel ticks) it glides there instead of jumping.
+        let driven = ed.dragging || ed.fling != 0 || ed.speed != 0
+        let p = settle.position(target: atRest ? (rawP + 1e-6).rounded(.down) + 0.5 : rawP, moving: driven)
         let totalFrames = Int((D * F - 1e-6).rounded(.up))
         let yOf: (Double) -> CGFloat = { [cellH, gateY] t in gateY - dir * CGFloat(t * F - p) * cellH }
         let thumbs = ed.thumbs
