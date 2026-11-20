@@ -48,7 +48,7 @@ struct ViewerView: View {
                 EmptyStateView(editor: editor)
             } else {
                 GeometryReader { geo in
-                    let L = FilmLayout(available: CGSize(width: geo.size.width - 28, height: geo.size.height - 28))
+                    let L = FilmLayout(available: CGSize(width: geo.size.width - 28, height: geo.size.height - 28), geometry: editor.film)
                     ZStack(alignment: .topLeading) {
                         FilmSurroundView(editor: editor, layout: L)
                             .allowsHitTesting(false)
@@ -93,12 +93,12 @@ struct FilmLayout {
     let pic: CGRect                          // the gate's picture area, in film coordinates
     var frameH: CGFloat { Film35.pitch * mm }
 
-    init(available: CGSize) {
+    init(available: CGSize, geometry g: FilmGeometry) {
         let heightMM = Film35.pitch * (1 + 2 * Self.peek)
-        mm = max(3, min(available.width / Film35.width, available.height / heightMM))
-        film = CGSize(width: (Film35.width * mm).rounded(), height: (heightMM * mm).rounded())
-        pic = CGRect(x: (Film35.picX * mm).rounded(), y: ((film.height - Film35.picH * mm) / 2).rounded(),
-                     width: (Film35.picW * mm).rounded(), height: (Film35.picH * mm).rounded())
+        mm = max(3, min(available.width / g.width, available.height / heightMM))
+        film = CGSize(width: (g.width * mm).rounded(), height: (heightMM * mm).rounded())
+        pic = CGRect(x: (g.picX * mm).rounded(), y: ((film.height - g.picH * mm) / 2).rounded(),
+                     width: (g.picW * mm).rounded(), height: (g.picH * mm).rounded())
     }
 }
 

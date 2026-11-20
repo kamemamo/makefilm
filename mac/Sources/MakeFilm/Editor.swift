@@ -93,6 +93,12 @@ final class Editor {
     // MARK: derived
 
     var currentMedia: MediaClip? { media.first { $0.id == currentMediaID } }
+    /// The film's shape across: the picture takes the material's aspect — the first cut's in the reel
+    /// (as the reel is rendered), the clip's own in the source view.
+    var film: FilmGeometry {
+        let m = mode == .reel ? reel.first.flatMap { s in media.first { $0.id == s.mediaID } } : currentMedia
+        return FilmGeometry(aspect: CGFloat(m?.aspect ?? 16.0 / 9.0))
+    }
     var currentIndex: Int? { media.firstIndex { $0.id == currentMediaID } }
     func clip(_ id: UUID) -> MediaClip? { media.first { $0.id == id } }
     var clipMap: [UUID: MediaClip] { Dictionary(uniqueKeysWithValues: media.map { ($0.id, $0) }) }

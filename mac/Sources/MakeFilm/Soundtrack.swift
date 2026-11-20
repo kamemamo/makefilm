@@ -3,15 +3,12 @@ import CoreGraphics
 
 /// 35mm film geometry in millimetres: frames spaced as 3-perf pull-down (pictures almost edge to edge),
 /// optical soundtrack. `perforated` = false leaves the perforations off: the soundtrack widens into
-/// the left edge and the picture widens to 16:9, centred on the film.
+/// the left edge and the picture takes the material's own shape (see `FilmGeometry`).
 /// Everything that draws film (strip, viewer) scales these by "pixels per mm".
 enum Film35 {
-    /// Without perforations the film is trimmed on the right: only a frame line's worth of base
-    /// (0.7 mm) is left beside the picture.
-    static let width: CGFloat = perforated ? 35 : picX + picW + frameLine
+    static let perforated = false
     static let frameLine: CGFloat = 0.7
     static let perfPitch: CGFloat = 4.75
-    static let perforated = false
     static let perfsPerFrame = 3                // frame spacing, also with no perforations drawn
     static let pitch: CGFloat = perfPitch * CGFloat(perfsPerFrame)   // 14.25: one frame = 3 perforations
     static let perfW: CGFloat = 2.794           // KS perforation: wider than tall
@@ -20,15 +17,26 @@ enum Film35 {
     static let perfLeftX: CGFloat = 2.01        // from the film edge
     static let perfRightX: CGFloat = 35 - 2.01 - 2.794
     static var picH: CGFloat { pitch - frameLine }   // 13.55: fills the pitch but for a thin frame line
-    // With perforations: the track between the left perfs and the picture, the picture right of centre.
-    // Without: a wider track near the left edge and a 16:9 picture centred on the film.
+    static var picTop: CGFloat { (pitch - picH) / 2 }   // thin frame lines (0.7 mm) between frames
+    // With perforations: the track between the left perfs and the picture.
+    // Without: a wider track near the left edge.
     static let trackX: CGFloat = perforated ? 5.56 : 1.6
     static let trackW: CGFloat = perforated ? 2.03 : 3.0
-    static let picW: CGFloat = perforated ? 21.0 : (picH * 16 / 9 * 100).rounded() / 100   // 24.09
-    static let picX: CGFloat = perforated ? 7.8 : trackX + trackW + 0.85   // 5.45
     /// Where the edge print (timecode) runs, outside everything else on the left.
     static let edgePrintX: CGFloat = perforated ? perfLeftX * 0.45 : 0.75
-    static var picTop: CGFloat { (pitch - picH) / 2 }   // thin frame lines (0.7 mm) between frames
+}
+
+/// The across-the-film layout for a picture shape. Without perforations the picture is exactly the
+/// material's aspect (13.55 mm tall, as wide as that makes it) and the film is trimmed on the right
+/// to a frame line's worth of base, so the film's width follows the material too.
+struct FilmGeometry {
+    let aspect: CGFloat                         // picture width / height
+    init(aspect: CGFloat) { self.aspect = min(max(aspect, 0.3), 3.5) }
+
+    var picH: CGFloat { Film35.picH }
+    var picW: CGFloat { Film35.perforated ? 21.0 : picH * aspect }
+    var picX: CGFloat { Film35.perforated ? 7.8 : Film35.trackX + Film35.trackW + 0.85 }
+    var width: CGFloat { Film35.perforated ? 35 : picX + picW + Film35.frameLine }
 }
 
 /// Peak levels of a clip's audio, used to draw the variable-area soundtrack and the sound reel.

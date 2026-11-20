@@ -96,9 +96,13 @@ struct ContentView: View {
                 let reel = editor.mode == .reel
                 let base: CGFloat = reel ? 400 : 250              // the reel gets a sound reel beside it
                 let overviewW: CGFloat = editor.isZoomed ? (reel ? 150 : 96) : 0
-                // Zoomed, the strip grows and pushes the viewer over, but always leaves the viewer some room.
-                let room = geo.size.width - 260 - overviewW - 380
-                let stripW = max(base, min(base * CGFloat(editor.stripZoom), room))
+                // Zoomed, the picture film grows by the zoom and pushes the viewer over. The viewer keeps
+                // at least 380pt; if that leaves too little, the side panel steps aside for the zoom.
+                let z = CGFloat(editor.stripZoom)
+                let want = reel ? 36 + 14 + 22 + FilmStripNSView.reelFilm1x * (z + 1) : 80 + FilmStripNSView.sourceFilm1x * z
+                let showPanel = !editor.isZoomed || want <= geo.size.width - 260 - overviewW - 380
+                let room = geo.size.width - (showPanel ? 260 : 0) - overviewW - 380
+                let stripW = max(base, min(want, room))
                 HStack(spacing: 0) {
                     if editor.isZoomed {
                         FilmStripView(editor: editor, overview: true)
@@ -115,9 +119,12 @@ struct ContentView: View {
                     Divider().overlay(Theme.line)
                     ViewerView(editor: editor)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    Divider().overlay(Theme.line)
-                    MediaPanel(editor: editor)
-                        .frame(width: 260)
+                    if showPanel {
+                        Divider().overlay(Theme.line)
+                        MediaPanel(editor: editor)
+                            .frame(width: 260)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 }
             }
             Divider().overlay(Theme.line)
