@@ -126,7 +126,7 @@ extension Editor {
             loadedAudio.append(a)
         }
 
-        stripFPS = [6, 12, 24].contains(file.stripFPS) ? file.stripFPS : 12
+        stripFPS = [0, 6, 12, 24].contains(file.stripFPS) ? file.stripFPS : 0
         direction = file.direction >= 0 ? 1 : -1
         thumbs.removeAll()
         envelopes.removeAll()

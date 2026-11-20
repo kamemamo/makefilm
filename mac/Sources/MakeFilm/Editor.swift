@@ -14,12 +14,19 @@ final class Editor {
     var speed: Double = 0
     /// -1 = film flows upward (default), 1 = downward (Moviola).
     var direction: Int = -1
-    var stripFPS: Int = 12 {
-        didSet {
-            thumbs.fps = stripFPS
-            for m in media { thumbs.updateMaxIndex(m) }
-            thumbVersion += 1
-        }
+    /// Frame density of the strip (the header's picker): cells per second, or 0 = the material's own
+    /// frame rate, so one cell on the strip is one frame of the picture.
+    var stripFPS: Int = 0 {
+        didSet { syncStripRate() }
+    }
+    /// Cells per second actually drawn.
+    var stripRate: Double { stripFPS == 0 ? max(1, engine.fps) : Double(stripFPS) }
+    /// Keep the thumbnails in step with the density (the material's rate changes with what's loaded).
+    func syncStripRate() {
+        guard abs(thumbs.fps - stripRate) > 1e-6 else { return }
+        thumbs.fps = stripRate
+        for m in media { thumbs.updateMaxIndex(m) }
+        thumbVersion += 1
     }
     var activeSegmentIndex = -1
     var thumbVersion = 0

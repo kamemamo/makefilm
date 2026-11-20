@@ -121,7 +121,7 @@ struct FilmSurroundView: View {
 
     /// Film position in strip frames (cells); cell c is centred in the gate at c + 0.5.
     private func position() -> Double {
-        let p = editor.time * Double(editor.stripFPS)
+        let p = editor.time * editor.stripRate
         // Stopped or hand-cranked: the frame under the playhead sits squarely in the gate.
         guard editor.speed != 0 else { return (p + 1e-6).rounded(.down) + 0.5 }
         let forward = editor.speed > 0
@@ -134,7 +134,7 @@ struct FilmSurroundView: View {
 
     private func draw(_ gc: GraphicsContext, _ size: CGSize, _ tick: Date) {
         let L = layout, mm = L.mm
-        let F = Double(editor.stripFPS)
+        let F = editor.stripRate
         let dir = CGFloat(editor.direction)
         let d = CGFloat(position())
         let midY = size.height / 2

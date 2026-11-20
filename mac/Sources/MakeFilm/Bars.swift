@@ -66,9 +66,10 @@ struct HeaderBar: View {
             }
             Text(L("コマ密度")).foregroundStyle(Theme.muted)
             Picker("", selection: $editor.stripFPS) {
-                Text(L("6 /秒")).tag(6); Text(L("12 /秒")).tag(12); Text(L("24 /秒")).tag(24)
+                Text(L("素材と同じ")).tag(0); Text(L("6 /秒")).tag(6); Text(L("12 /秒")).tag(12); Text(L("24 /秒")).tag(24)
             }
-            .labelsHidden().frame(width: 90)
+            .labelsHidden().frame(width: 110)
+            .help(L("縦フィルムの 1 秒あたりのコマ数。「素材と同じ」なら 1 コマ＝動画の 1 フレーム"))
             Text(L("拡大")).foregroundStyle(Theme.muted)
             Picker("", selection: Binding(get: { Editor.zoomSteps.min { abs($0 - editor.stripZoom) < abs($1 - editor.stripZoom) } ?? 1 },
                                           set: { editor.setZoom($0) })) {

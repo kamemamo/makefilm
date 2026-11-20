@@ -6,7 +6,10 @@ import CoreGraphics
 /// the left edge and the picture widens to 16:9, centred on the film.
 /// Everything that draws film (strip, viewer) scales these by "pixels per mm".
 enum Film35 {
-    static let width: CGFloat = 35
+    /// Without perforations the film is trimmed on the right: only a frame line's worth of base
+    /// (0.7 mm) is left beside the picture.
+    static let width: CGFloat = perforated ? 35 : picX + picW + frameLine
+    static let frameLine: CGFloat = 0.7
     static let perfPitch: CGFloat = 4.75
     static let perforated = false
     static let perfsPerFrame = 3                // frame spacing, also with no perforations drawn
@@ -16,13 +19,13 @@ enum Film35 {
     static let perfCorner: CGFloat = 0.5
     static let perfLeftX: CGFloat = 2.01        // from the film edge
     static let perfRightX: CGFloat = 35 - 2.01 - 2.794
-    static let picH: CGFloat = 13.55            // fills the pitch but for a thin frame line
+    static var picH: CGFloat { pitch - frameLine }   // 13.55: fills the pitch but for a thin frame line
     // With perforations: the track between the left perfs and the picture, the picture right of centre.
     // Without: a wider track near the left edge and a 16:9 picture centred on the film.
     static let trackX: CGFloat = perforated ? 5.56 : 1.6
     static let trackW: CGFloat = perforated ? 2.03 : 3.0
     static let picW: CGFloat = perforated ? 21.0 : (picH * 16 / 9 * 100).rounded() / 100   // 24.09
-    static let picX: CGFloat = perforated ? 7.8 : (width - picW) / 2
+    static let picX: CGFloat = perforated ? 7.8 : trackX + trackW + 0.85   // 5.45
     /// Where the edge print (timecode) runs, outside everything else on the left.
     static let edgePrintX: CGFloat = perforated ? perfLeftX * 0.45 : 0.75
     static var picTop: CGFloat { (pitch - picH) / 2 }   // thin frame lines (0.7 mm) between frames

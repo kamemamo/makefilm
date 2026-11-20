@@ -7,7 +7,8 @@ import CoreGraphics
 final class ThumbnailStore {
     struct Key: Hashable { let media: UUID; let index: Int }
 
-    var fps: Int = 12 {
+    /// Strip cells per second (thumbnails are made one per cell). May be fractional (29.97).
+    var fps: Double = 12 {
         didSet { if oldValue != fps { reset() } }
     }
     /// Called when a frame requested by the bin/media list (a "keep" request) becomes available.
@@ -29,12 +30,12 @@ final class ThumbnailStore {
         g.appliesPreferredTrackTransform = true
         g.maximumSize = CGSize(width: 240, height: 240)
         generators[m.id] = g
-        maxIndex[m.id] = Int(((m.duration - 0.001) * Double(fps)).rounded(.down))
+        maxIndex[m.id] = Int(((m.duration - 0.001) * fps).rounded(.down))
         applyTolerance()
     }
 
     private func applyTolerance() {
-        let tol = cm(0.4 / Double(fps))
+        let tol = cm(0.4 / fps)
         for g in generators.values {
             g.requestedTimeToleranceBefore = tol
             g.requestedTimeToleranceAfter = tol
@@ -59,10 +60,10 @@ final class ThumbnailStore {
     }
 
     func updateMaxIndex(_ m: MediaClip) {
-        maxIndex[m.id] = Int(((m.duration - 0.001) * Double(fps)).rounded(.down))
+        maxIndex[m.id] = Int(((m.duration - 0.001) * fps).rounded(.down))
     }
 
-    func index(for seconds: Double) -> Int { Int((seconds * Double(fps) + 1e-6).rounded(.down)) }
+    func index(for seconds: Double) -> Int { Int((seconds * fps + 1e-6).rounded(.down)) }
 
     // MARK: per-frame requests from the strip
 
@@ -123,7 +124,7 @@ final class ThumbnailStore {
                     if isKeep { self.keep[id]?.remove(idx) }
                     continue
                 }
-                let time = cm((Double(idx) + 0.5) / Double(fpsAtStart))
+                let time = cm((Double(idx) + 0.5) / fpsAtStart)
                 let img = try? await gen.image(at: time).image
                 guard self.fps == fpsAtStart else { break }
                 if let img {

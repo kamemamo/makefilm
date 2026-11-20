@@ -75,31 +75,49 @@ final class FilmStripNSView: NSView {
 
         let segs = ed.segments
         let D = segs.reduce(0) { $0 + $1.length }
-        let F = Double(ed.stripFPS)
+        ed.syncStripRate()
+        let F = ed.stripRate
         let dir = CGFloat(ed.direction)
-        // real 35mm print proportions (see Film35): 4-perf frames, Academy picture, optical soundtrack
+        // real 35mm proportions (see Film35): 3-perf frame spacing, optical soundtrack
         // In the reel, a sound reel (magnetic film with the music) runs right beside the picture.
         let soundReel = ed.mode == .reel
         let zoom = CGFloat(ed.stripZoom)
-        let filmW: CGFloat, fx: CGFloat
+        var filmW: CGFloat, fx: CGFloat
+        // The column the picture film may use. Zoomed past what fits, the film is drawn larger than
+        // its column and cropped to it around the picture, like a loupe on the frame.
+        var colX0: CGFloat = 0, colX1: CGFloat = W
         if overview {
             // narrow: no ruler on the left, room on the right for the lines out to the zoomed strip
             filmW = soundReel ? (W - 8 - 4 - 18) / 2 : W - 8 - 18
             fx = 8
             soundX = soundReel ? fx + filmW + 4 : -1
         } else {
+            let colW: CGFloat
             if soundReel {
                 // The picture gets its magnification first; when the column can't widen any more
                 // (small window) the sound reel beside it narrows instead of the picture shrinking.
                 let room = W - 36 - 14 - 22
-                filmW = zoom <= 1.01 ? min(room / 2, 170) : min(170 * zoom, max(room / 2, room - 56))
-                soundW = min(filmW, room - filmW)
+                filmW = zoom <= 1.01 ? min(room / 2, 170) : 170 * zoom
+                colW = zoom <= 1.01 ? filmW : min(filmW, max(room / 2, room - 56))
+                soundW = min(colW, room - colW)
+                colX0 = 36
             } else {
-                filmW = min(W - 80, 180 * zoom)
+                colW = min(W - 80, 180 * zoom)
+                filmW = zoom <= 1.01 ? colW : 180 * zoom
+                colX0 = (36 + max(0, (W - 80 - colW) / 2)).rounded()
             }
-            fx = soundReel ? 36 : (36 + max(0, (W - 80 - filmW) / 2)).rounded()
-            soundX = soundReel ? fx + filmW + 14 : -1
+            colX1 = colX0 + colW
+            if filmW > colW + 0.5 {
+                // centre the picture in the column, without letting the film edge come inside it
+                let picMid = (Film35.picX + Film35.picW / 2) * filmW / Film35.width
+                fx = min(colX0, max(colX1 - filmW, (colX0 + colW / 2 - picMid).rounded()))
+            } else {
+                fx = colX0
+            }
+            soundX = soundReel ? colX1 + 14 : -1
         }
+        let loupe = !overview && filmW > colX1 - colX0 + 0.5
+        let colRect = CGRect(x: colX0, y: 0, width: colX1 - colX0, height: H)
         let mm = filmW / Film35.width
         if overview || !soundReel { soundW = soundReel ? filmW : 0 }
         cellH = Film35.pitch * mm
@@ -115,6 +133,7 @@ final class FilmStripNSView: NSView {
         let thumbs = ed.thumbs
         thumbs.beginFrame()
 
+        if loupe { ctx.saveGState(); ctx.clip(to: colRect) }
         // film base
         ctx.setFillColor(.hex(0x2B1A0D)); ctx.fill(CGRect(x: fx, y: 0, width: filmW, height: H))
         ctx.setFillColor(.hex(0xFFBE78, 0.05))
@@ -176,13 +195,17 @@ final class FilmStripNSView: NSView {
             }
 
             // seconds ruler
-            if !overview && inRange && k % Int(F) == 0 {
+            let perSecond = max(1, Int(F.rounded()))
+            if !overview && inRange && k % perSecond == 0 {
+                if loupe { ctx.restoreGState() }      // the ruler sits outside the film's column
                 let yb = yOf(Double(k) / F)
-                let s = k / Int(F)
+                let s = k / perSecond
                 let label = String(format: "%d:%02d", s / 60, s % 60) as NSString
                 let sz = label.size(withAttributes: rulerAttrs)
-                label.draw(at: CGPoint(x: fx - 8 - sz.width, y: yb - sz.height / 2), withAttributes: rulerAttrs)
-                ctx.setFillColor(.hex(0x7D8676)); ctx.fill(CGRect(x: fx - 5, y: yb - 0.5, width: 4, height: 1))
+                let rx = max(fx, colX0)
+                label.draw(at: CGPoint(x: rx - 8 - sz.width, y: yb - sz.height / 2), withAttributes: rulerAttrs)
+                ctx.setFillColor(.hex(0x7D8676)); ctx.fill(CGRect(x: rx - 5, y: yb - 0.5, width: 4, height: 1))
+                if loupe { ctx.saveGState(); ctx.clip(to: colRect) }
             }
         }
         thumbs.endFrame()
@@ -280,7 +303,8 @@ final class FilmStripNSView: NSView {
             if let b = outLine { mark(b, overview ? "" : "OUT", -12) }
         }
 
-        if soundReel { drawSoundReel(ctx, ed: ed, x: soundX, w: soundW, mm: soundW / Film35.width, H: H, p: p, dir: dir, F: F, yOf: yOf) }
+        if loupe { ctx.restoreGState() }
+        if soundReel { drawSoundReel(ctx, ed: ed, x: soundX, w: soundW, mm: soundW / 35, H: H, p: p, dir: dir, F: F, yOf: yOf) }
 
         // the gate: lit aperture with corner brackets
         let cx = fx + filmW / 2
@@ -289,13 +313,14 @@ final class FilmStripNSView: NSView {
                                  locations: [0, 1]) {
             ctx.saveGState()
             ctx.clip(to: CGRect(x: fx - 20, y: gateY - cellH, width: filmW + 40, height: cellH * 2))
+            if loupe { ctx.clip(to: colRect) }
             ctx.drawRadialGradient(glow, startCenter: CGPoint(x: cx, y: gateY), startRadius: 0,
                                    endCenter: CGPoint(x: cx, y: gateY), endRadius: filmW * 0.9, options: [])
             ctx.restoreGState()
         }
         let c: CGFloat = overview ? 5 : 10
-        let g0 = CGPoint(x: picX - 4, y: gateY - picH / 2 - 4)
-        let g1 = CGPoint(x: picX + picW + 4, y: gateY + picH / 2 + 4)
+        let g0 = CGPoint(x: max(picX - 4, colX0 + 2), y: gateY - picH / 2 - 4)
+        let g1 = CGPoint(x: min(picX + picW + 4, colX1 - 2), y: gateY + picH / 2 + 4)
         ctx.setStrokeColor(.hex(0xE3A548)); ctx.setLineWidth(2); ctx.setLineCap(.butt)
         ctx.addLines(between: [CGPoint(x: g0.x, y: g0.y + c), g0, CGPoint(x: g0.x + c, y: g0.y)])
         ctx.addLines(between: [CGPoint(x: g1.x - c, y: g0.y), CGPoint(x: g1.x, y: g0.y), CGPoint(x: g1.x, y: g0.y + c)])
@@ -436,7 +461,7 @@ final class FilmStripNSView: NSView {
 
     // MARK: hand-cranking
 
-    private var F: Double { Double(MainActor.assumeIsolated { editor?.stripFPS ?? 12 }) }
+    private var F: Double { MainActor.assumeIsolated { editor?.stripRate ?? 12 } }
     private var dirD: Double { Double(MainActor.assumeIsolated { editor?.direction ?? 1 }) }
 
     override func mouseDown(with e: NSEvent) {
