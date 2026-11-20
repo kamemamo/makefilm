@@ -66,6 +66,7 @@ extension Editor {
         media = []; reel = []; undoStack = []; redoStack = []
         musicSources = []; music = []; selectedMusicID = nil
         currentMediaID = nil; mode = .source; reelTime = 0
+        stripFPS = 0                                     // density back to the default: the clip's rate
         projectURL = nil
         reloadPlayer(at: 0)
         savedCore = core()
@@ -126,7 +127,7 @@ extension Editor {
             loadedAudio.append(a)
         }
 
-        stripFPS = [0, 6, 12, 24].contains(file.stripFPS) ? file.stripFPS : 0
+        stripFPS = file.stripFPS == 24 ? 24 : 0     // 6 / 12 from older projects → the clip's rate
         direction = file.direction >= 0 ? 1 : -1
         thumbs.removeAll(); thumbsHi.removeAll()
         envelopes.removeAll()

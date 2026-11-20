@@ -9,9 +9,7 @@
 "↓ 下へ" = "↓ Down";
 "フィルムが上から下へ流れる（ムービオラ式）" = "Film runs top to bottom (Moviola style)";
 "コマ密度" = "Frames";
-"6 /秒" = "6 /sec";
-"12 /秒" = "12 /sec";
-"24 /秒" = "24 /sec";
+"24 /秒（フィルム）" = "24 /sec (film)";
 "書き出し…" = "Export…";
 "リール・素材の範囲・今のコマを、形式とサイズを選んで書き出す (⌘E)" = "Export the reel, a source range or the current frame in the format and size you choose (⌘E)";
 "1フレーム戻す (←)" = "Back one frame (←)";
@@ -160,4 +158,4 @@
 "フィルムを等倍に" = "Actual Size Film";
 "フィルムの一部を拡大する。左に全体のリールが出て、拡大している範囲を枠で示す（Z で切り替え、＋／−、ピンチ）" = "Zoom in on part of the film. The whole reel appears on the left with the zoomed stretch outlined (Z toggles, + / −, pinch)";
 "素材と同じ" = "Same as clip";
-"縦フィルムの 1 秒あたりのコマ数。「素材と同じ」なら 1 コマ＝動画の 1 フレーム" = "Frames per second on the strip. \"Same as clip\" makes one strip frame one frame of the video";
+"縦フィルムの 1 秒あたりのコマ数。「素材と同じ」なら 1 コマ＝動画の 1 フレーム、「24 /秒」なら本物のフィルムと同じ流れ" = "Frames per second on the strip. \"Same as clip\" makes one strip frame one frame of the video; \"24 /sec\" runs like real film";
