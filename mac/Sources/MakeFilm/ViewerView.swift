@@ -84,6 +84,20 @@ struct ViewerView: View {
     }
 }
 
+/// Intermittent movement, as a projector's claw does it: each frame holds still in the gate for a
+/// while, then is pulled down to the next one quickly. `p` is the continuous position in cells;
+/// the result is where the film is drawn (a frame is centred at c + 0.5).
+enum Pulldown {
+    static let hold = 0.55                       // share of each frame spent standing still
+
+    static func position(_ p: Double, forward: Bool) -> Double {
+        let c = forward ? p.rounded(.down) : p.rounded(.up) - 1
+        let frac = forward ? p - c : (c + 1) - p             // 0…1 through the current cell, in travel direction
+        let k = frac < hold ? 0 : { let x = (frac - hold) / (1 - hold); return x * x * (3 - 2 * x) }()
+        return forward ? c + 0.5 + k : c + 0.5 - k
+    }
+}
+
 /// Size of the film piece shown in the hood: the gate frame plus a little of the frames around it.
 struct FilmLayout {
     static let peek: CGFloat = 0.22          // fraction of a frame pitch showing above and below
@@ -124,12 +138,7 @@ struct FilmSurroundView: View {
         let p = editor.time * editor.stripRate
         // Stopped or hand-cranked: the frame under the playhead sits squarely in the gate.
         guard editor.speed != 0 else { return (p + 1e-6).rounded(.down) + 0.5 }
-        let forward = editor.speed > 0
-        let c = forward ? p.rounded(.down) : p.rounded(.up) - 1
-        let frac = forward ? p - c : (c + 1) - p             // 0…1 through the current cell, in travel direction
-        let hold = 0.55
-        let k = frac < hold ? 0 : { let x = (frac - hold) / (1 - hold); return x * x * (3 - 2 * x) }()
-        return forward ? c + 0.5 + k : c + 0.5 - k
+        return Pulldown.position(p, forward: editor.speed > 0)
     }
 
     private func draw(_ gc: GraphicsContext, _ size: CGSize, _ tick: Date) {

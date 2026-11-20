@@ -121,7 +121,11 @@ final class FilmStripNSView: NSView {
         // Dragged or running, the film follows exactly. Otherwise (coming to rest, snapping to a frame,
         // stepping, between scroll-wheel ticks) it glides there instead of jumping.
         let driven = ed.dragging || ed.fling != 0 || ed.speed != 0
-        let p = settle.position(target: atRest ? (rawP + 1e-6).rounded(.down) + 0.5 : rawP, moving: driven)
+        // Playing, the strip moves intermittently like the gate (hold, then pull down a frame), so the
+        // frames stand still long enough to be seen instead of streaming past.
+        let target = atRest ? (rawP + 1e-6).rounded(.down) + 0.5
+            : ed.speed != 0 && !ed.dragging ? Pulldown.position(rawP, forward: ed.speed > 0) : rawP
+        let p = settle.position(target: target, moving: driven)
         let totalFrames = Int((D * F - 1e-6).rounded(.up))
         let yOf: (Double) -> CGFloat = { [cellH, gateY] t in gateY - dir * CGFloat(t * F - p) * cellH }
         let thumbs = ed.thumbs
