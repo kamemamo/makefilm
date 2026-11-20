@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 対象バージョン | 0.5.0（`mac/Info.plist` の `CFBundleShortVersionString`） |
+| 対象バージョン | 0.6.0（`mac/Info.plist` の `CFBundleShortVersionString`） |
 | 最終更新 | 2026-11-20 |
 | 対象 | Mac アプリ（`mac/`）。Web 試作（`index.html`）は参考扱い |
 
