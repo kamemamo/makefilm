@@ -406,7 +406,8 @@ final class FilmStripNSView: NSView {
                 return
             }
         }
-        MainActor.assumeIsolated { editor?.beginDrag() }
+        // grabbing the picture (or empty tape) puts the music selection down, so Delete acts on the picture again
+        MainActor.assumeIsolated { editor?.selectedMusicID = nil; editor?.beginDrag() }
         NSCursor.closedHand.push()
         lastY = convert(e.locationInWindow, from: nil).y
         moved = 0; vel = 0; lastMoveT = e.timestamp

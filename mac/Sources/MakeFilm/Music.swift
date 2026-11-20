@@ -218,7 +218,7 @@ extension Editor {
         music.removeAll { $0.id == id }
         if selectedMusicID == id { selectedMusicID = nil }
         musicChanged()
-        toast(L("サウンドリールから外しました"))
+        toast(L("曲を削除しました"))
     }
 
     /// Music clip under a reel time (the last one placed wins where they overlap).
@@ -326,7 +326,8 @@ struct MusicPanel: View {
                     HStack(spacing: 4) { Text(L("ゲートで切る")); Kbd("⇧C") }
                 }
                 .help(L("ゲートの位置で曲を 2 つに分ける"))
-                Button { editor.removeMusic(c.id) } label: { HStack(spacing: 4) { Text(L("外す")); Kbd("⇧X") } }
+                Button { editor.removeMusic(c.id) } label: { HStack(spacing: 4) { Text(L("削除")); Kbd("⌫") } }
+                    .help(L("選んでいる曲（の片）をサウンドリールから削除する（⌫ または ⇧X）"))
             }
             HStack(spacing: 6) {
                 Button(L("ゲートで頭を切る")) { editor.trimMusicHead(c.id) }

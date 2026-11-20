@@ -179,6 +179,7 @@ final class Editor {
         if m == .source && currentMedia == nil { return }
         rememberPosition()
         mode = m
+        if m == .source { selectedMusicID = nil }
         reloadPlayer(at: m == .source ? (currentMedia?.lastTime ?? 0) : reelTime)
     }
 
@@ -445,6 +446,7 @@ final class Editor {
 
     func jumpToSegment(_ index: Int) {
         guard reel.indices.contains(index) else { return }
+        selectedMusicID = nil
         if mode != .reel { setMode(.reel) }
         let start = reel.prefix(index).reduce(0) { $0 + $1.length }
         jump(to: start + 0.5 / engine.fps)
@@ -510,7 +512,10 @@ final class Editor {
         switch e.keyCode {
         case 49: togglePlay(); return true                       // space
         case 36, 76: splice(); return true                       // return / enter
-        case 51, 117: liftAtGate(); return true                  // delete
+        case 51, 117:                                            // delete
+            // a selected piece of music goes first; otherwise the picture cut at the gate
+            if mode == .reel, let id = selectedMusicID { removeMusic(id) } else { liftAtGate() }
+            return true
         case 123: step(-n); return true                          // ←
         case 124: step(n); return true                           // →
         case 125: step(n * direction); return true               // ↓ film moves down

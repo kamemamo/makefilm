@@ -150,3 +150,6 @@
 "ゲートで切る" = "Cut at gate";
 "ゲートの位置で曲を 2 つに分ける" = "Split the music in two at the gate";
 "曲を切る" = "Cut Music";
+"削除" = "Delete";
+"選んでいる曲（の片）をサウンドリールから削除する（⌫ または ⇧X）" = "Delete the selected music (piece) from the sound reel (⌫ or ⇧X)";
+"曲を削除しました" = "Deleted the music";
