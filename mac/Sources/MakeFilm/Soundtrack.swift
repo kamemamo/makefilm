@@ -1,12 +1,14 @@
 import AVFoundation
 import CoreGraphics
 
-/// 35mm print geometry in millimetres (Academy frame, 4-perf, optical soundtrack).
+/// 35mm print geometry in millimetres (3-perf pull-down, optical soundtrack).
+/// 3 perforations per frame suits 16:9 material: the pictures sit almost edge to edge.
 /// Everything that draws film (strip, viewer) scales these by "pixels per mm".
 enum Film35 {
     static let width: CGFloat = 35
-    static let pitch: CGFloat = 19              // one frame = 4 perforations
     static let perfPitch: CGFloat = 4.75
+    static let perfsPerFrame = 3
+    static let pitch: CGFloat = perfPitch * CGFloat(perfsPerFrame)   // 14.25: one frame = 3 perforations
     static let perfW: CGFloat = 2.794           // KS perforation: wider than tall
     static let perfH: CGFloat = 1.981
     static let perfCorner: CGFloat = 0.5
@@ -14,25 +16,29 @@ enum Film35 {
     static let perfRightX: CGFloat = 35 - 2.01 - 2.794
     static let trackX: CGFloat = 5.56           // optical soundtrack, between left perfs and picture
     static let trackW: CGFloat = 2.03
-    static let picX: CGFloat = 7.8              // Academy picture area (sits right of centre)
+    static let picX: CGFloat = 7.8              // picture area beside the soundtrack (sits right of centre)
     static let picW: CGFloat = 21.0
-    static let picH: CGFloat = 15.2
-    static var picTop: CGFloat { (pitch - picH) / 2 }   // thick frame lines above and below
+    static let picH: CGFloat = 13.55            // fills the pitch but for a thin frame line
+    static var picTop: CGFloat { (pitch - picH) / 2 }   // thin frame lines (0.7 mm) between frames
 }
 
-/// Peak levels of a clip's audio, used to draw the variable-area soundtrack.
+/// Peak levels of a clip's audio, used to draw the variable-area soundtrack and the sound reel.
 final class AudioEnvelope: @unchecked Sendable {
-    static let binsPerSecond: Double = 240
-    /// One array per channel (1 or 2), values 0…1, already shaped for display.
+    let binsPerSecond: Double
+    /// One array per lane, values 0…1, already shaped for display. Per channel (1 or 2) — or, for a
+    /// `detailed` envelope, the positive and the negative peaks of the mix, for an editor-style waveform.
     let channels: [[Float]]
 
-    init(channels: [[Float]]) { self.channels = channels }
+    init(channels: [[Float]], binsPerSecond: Double = 240) {
+        self.channels = channels
+        self.binsPerSecond = binsPerSecond
+    }
 
     /// Loudest level of channel `ch` between two source times.
     func level(_ ch: Int, from a: Double, to b: Double) -> Float {
         let lane = channels[min(ch, channels.count - 1)]
         guard !lane.isEmpty else { return 0 }
-        var i0 = Int(a * Self.binsPerSecond), i1 = Int(b * Self.binsPerSecond)
+        var i0 = Int(a * binsPerSecond), i1 = Int(b * binsPerSecond)
         if i1 < i0 { swap(&i0, &i1) }
         i0 = max(0, i0); i1 = min(lane.count - 1, max(i1, i0))
         guard i0 < lane.count else { return 0 }
@@ -42,7 +48,10 @@ final class AudioEnvelope: @unchecked Sendable {
     }
 
     /// Reads the audio once (resampled to 24 kHz) and keeps a peak per 1/240 s.
-    static func make(asset: AVAsset, track: AVAssetTrack) async -> AudioEnvelope? {
+    /// `detailed`: a peak per 1/4000 s, positive and negative apart, kept nearly linear — the spiky
+    /// waveform of an audio editor, drawn on the sound reel.
+    static func make(asset: AVAsset, track: AVAssetTrack, detailed: Bool = false) async -> AudioEnvelope? {
+        let binsPerSecond: Double = detailed ? 4000 : 240
         var sourceChannels = 2
         if let fd = try? await track.load(.formatDescriptions).first,
            let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(fd)?.pointee {
@@ -71,8 +80,9 @@ final class AudioEnvelope: @unchecked Sendable {
         guard reader.startReading() else { return nil }
 
         let perBin = Int(24_000 / binsPerSecond)
-        var peaks = Array(repeating: [Float](), count: nch)
-        var cur = [Float](repeating: 0, count: nch)
+        let lanes = detailed ? 2 : nch
+        var peaks = Array(repeating: [Float](), count: lanes)
+        var cur = [Float](repeating: 0, count: lanes)
         var n = 0
         var buf = [Float]()
         while let sb = out.copyNextSampleBuffer() {
@@ -84,21 +94,31 @@ final class AudioEnvelope: @unchecked Sendable {
             _ = buf.withUnsafeMutableBytes { CMBlockBufferCopyDataBytes(bb, atOffset: 0, dataLength: bytes, destination: $0.baseAddress!) }
             var i = 0
             while i + nch <= buf.count {
-                for c in 0..<nch { let v = abs(buf[i + c]); if v > cur[c] { cur[c] = v } }
+                if detailed {
+                    for c in 0..<nch {
+                        let v = buf[i + c]
+                        if v > cur[0] { cur[0] = v }
+                        if -v > cur[1] { cur[1] = -v }
+                    }
+                } else {
+                    for c in 0..<nch { let v = abs(buf[i + c]); if v > cur[c] { cur[c] = v } }
+                }
                 i += nch; n += 1
                 if n == perBin {
-                    for c in 0..<nch { peaks[c].append(cur[c]); cur[c] = 0 }
+                    for c in 0..<lanes { peaks[c].append(cur[c]); cur[c] = 0 }
                     n = 0
                 }
             }
         }
-        if n > 0 { for c in 0..<nch { peaks[c].append(cur[c]) } }
+        if n > 0 { for c in 0..<lanes { peaks[c].append(cur[c]) } }
         guard reader.status == .completed || reader.status == .reading else { return nil }
 
         // Normalise to the clip's loudest peak and lift quiet passages so speech stays visible.
+        // (The detailed waveform stays close to linear, so peaks stand out as spikes.)
         let top = max(peaks.joined().max() ?? 0, 0.05)
-        let shaped = peaks.map { lane in lane.map { min(1, pow($0 / top, 0.6)) } }
-        return AudioEnvelope(channels: shaped)
+        let curve: Float = detailed ? 0.85 : 0.6
+        let shaped = peaks.map { lane in lane.map { min(1, pow($0 / top, curve)) } }
+        return AudioEnvelope(channels: shaped, binsPerSecond: binsPerSecond)
     }
 }
 
@@ -119,12 +139,40 @@ func soundtrackPath(centerX: CGFloat, halfWidth: CGFloat, y0: CGFloat, y1: CGFlo
     return path
 }
 
+/// Closed shape of an editor-style waveform between y0 and y1: `level(y)` gives the (left, right)
+/// extents 0…1 — negative peaks to the left of the centre line, positive to the right.
+func waveformPath(centerX: CGFloat, halfWidth: CGFloat, y0: CGFloat, y1: CGFloat, step: CGFloat,
+                  level: (CGFloat) -> (Float, Float)) -> CGPath {
+    var ys: [CGFloat] = []
+    var y = y0
+    while y < y1 { ys.append(y); y += step }
+    ys.append(y1)
+    let w = ys.map { level($0) }
+    let path = CGMutablePath()
+    path.move(to: CGPoint(x: centerX - max(0.5, CGFloat(w[0].0) * halfWidth), y: ys[0]))
+    for i in 1..<ys.count { path.addLine(to: CGPoint(x: centerX - max(0.5, CGFloat(w[i].0) * halfWidth), y: ys[i])) }
+    for i in stride(from: ys.count - 1, through: 0, by: -1) {
+        path.addLine(to: CGPoint(x: centerX + max(0.5, CGFloat(w[i].1) * halfWidth), y: ys[i]))
+    }
+    path.closeSubpath()
+    return path
+}
+
 infix operator |>: AdditionPrecedence
 private func |> <A, B>(a: A, f: (A) -> B) -> B { f(a) }
 
 extension Editor {
-    /// Level for a lane of the soundtrack at a span of sequence time (nil outside the material).
+    /// Level for a lane of the optical soundtrack at a span of sequence time (nil where there is no sound).
+    /// In the reel the print carries the mix, as a release print would: the picture's own sound
+    /// together with the music on the sound reel.
     func soundLevel(lane: Int, from t0: Double, to t1: Double) -> Float? {
+        let picture = pictureSoundLevel(lane: lane, from: t0, to: t1)
+        guard mode == .reel, let m = musicLevel(from: t0, to: t1) else { return picture }
+        let music = pow(m, 0.6 / 0.85)          // the music waveform is near-linear; match the track's curve
+        return max(picture ?? 0, music)
+    }
+
+    private func pictureSoundLevel(lane: Int, from t0: Double, to t1: Double) -> Float? {
         let segs = segments
         let D = segs.reduce(0) { $0 + $1.length }
         let mid = (t0 + t1) / 2

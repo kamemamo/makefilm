@@ -3,18 +3,23 @@ import AppKit
 
 /// The vertical 35mm strip. Frames run through a fixed gate in the middle,
 /// like film threaded through a Moviola. Drag it like hand-cranking.
+/// With `overview`, it is the narrow whole-reel strip shown beside a zoomed strip, with the zoomed
+/// stretch outlined.
 struct FilmStripView: NSViewRepresentable {
     let editor: Editor
+    var overview = false
     func makeNSView(context: Context) -> FilmStripNSView {
         let v = FilmStripNSView()
         v.editor = editor
+        v.overview = overview
         return v
     }
-    func updateNSView(_ nsView: FilmStripNSView, context: Context) { nsView.editor = editor }
+    func updateNSView(_ nsView: FilmStripNSView, context: Context) { nsView.editor = editor; nsView.overview = overview }
 }
 
 final class FilmStripNSView: NSView {
     weak var editor: Editor?
+    var overview = false
     private var link: CADisplayLink?
 
     // geometry from the last draw, used for hit-testing
@@ -45,9 +50,7 @@ final class FilmStripNSView: NSView {
     }
 
     @objc private func onFrame(_ l: CADisplayLink) {
-        MainActor.assumeIsolated {
-            editor?.tick(now: l.timestamp)
-        }
+        if !overview { MainActor.assumeIsolated { editor?.tick(now: l.timestamp) } }
         needsDisplay = true
     }
 
@@ -77,12 +80,30 @@ final class FilmStripNSView: NSView {
         // real 35mm print proportions (see Film35): 4-perf frames, Academy picture, optical soundtrack
         // In the reel, a sound reel (magnetic film with the music) runs right beside the picture.
         let soundReel = ed.mode == .reel
-        let filmW = soundReel ? min((W - 36 - 14 - 22) / 2, 170) : min(W - 80, 180)
-        let fx = soundReel ? 36 : (36 + max(0, (W - 80 - filmW) / 2)).rounded()
+        let zoom = CGFloat(ed.stripZoom)
+        let filmW: CGFloat, fx: CGFloat
+        if overview {
+            // narrow: no ruler on the left, room on the right for the lines out to the zoomed strip
+            filmW = soundReel ? (W - 8 - 4 - 18) / 2 : W - 8 - 18
+            fx = 8
+            soundX = soundReel ? fx + filmW + 4 : -1
+        } else {
+            if soundReel {
+                // The picture gets its magnification first; when the column can't widen any more
+                // (small window) the sound reel beside it narrows instead of the picture shrinking.
+                let room = W - 36 - 14 - 22
+                filmW = zoom <= 1.01 ? min(room / 2, 170) : min(170 * zoom, max(room / 2, room - 56))
+                soundW = min(filmW, room - filmW)
+            } else {
+                filmW = min(W - 80, 180 * zoom)
+            }
+            fx = soundReel ? 36 : (36 + max(0, (W - 80 - filmW) / 2)).rounded()
+            soundX = soundReel ? fx + filmW + 14 : -1
+        }
         let mm = filmW / Film35.width
-        soundX = soundReel ? fx + filmW + 14 : -1
-        soundW = soundReel ? filmW : 0
+        if overview || !soundReel { soundW = soundReel ? filmW : 0 }
         cellH = Film35.pitch * mm
+        if !overview { ed.zoomedCellH = cellH }
         let picX = fx + Film35.picX * mm, picW = Film35.picW * mm, picH = Film35.picH * mm
         gateY = (H / 2).rounded()
         // Follow the hand while cranking or playing; at rest, park the frame squarely in the gate.
@@ -114,6 +135,7 @@ final class FilmStripNSView: NSView {
             let inRange = D > 0 && k >= 0 && k < totalFrames
 
             if !visible {
+                if overview { continue }
                 // prefetch a little beyond the screen, in the direction of travel
                 if inRange && (ahead == 0 || (k - kc).signum() == ahead),
                    let l = locate((Double(k) + 0.5) / F, in: segs) {
@@ -122,9 +144,9 @@ final class FilmStripNSView: NSView {
                 continue
             }
 
-            // perforations: 4 per frame each side (35mm)
+            // perforations: 3 per frame each side (3-perf 35mm)
             ctx.setFillColor(.hex(0x0F110F))
-            for j in 0..<4 {
+            for j in 0..<Film35.perfsPerFrame {
                 let py = y0 + (CGFloat(j) + 0.5) * Film35.perfPitch * mm - ph / 2
                 ctx.addPath(CGPath(roundedRect: CGRect(x: fx + Film35.perfLeftX * mm, y: py, width: pw, height: ph),
                                    cornerWidth: pr, cornerHeight: pr, transform: nil))
@@ -140,7 +162,7 @@ final class FilmStripNSView: NSView {
                 if d < bestD { bestD = d; thumbs.setFocus(l.segment.mediaID, idx) }
                 ctx.setFillColor(.hex(0x000000)); ctx.fill(frame)
                 if let img = thumbs.request(l.segment.mediaID, idx) {
-                    drawImage(ctx, img, contain: frame)
+                    drawImage(ctx, img, fill: frame)
                 } else {
                     ctx.setFillColor(.hex(0x1A120A)); ctx.fill(frame)
                 }
@@ -154,7 +176,7 @@ final class FilmStripNSView: NSView {
             }
 
             // seconds ruler
-            if inRange && k % Int(F) == 0 {
+            if !overview && inRange && k % Int(F) == 0 {
                 let yb = yOf(Double(k) / F)
                 let s = k / Int(F)
                 let label = String(format: "%d:%02d", s / 60, s % 60) as NSString
@@ -254,11 +276,11 @@ final class FilmStripNSView: NSView {
                 let s = label as NSString, sz = s.size(withAttributes: attrs)
                 s.draw(at: CGPoint(x: fx + filmW + 11, y: y + off * dir - sz.height / 2), withAttributes: attrs)
             }
-            if let a = inLine { mark(a, "IN", 12) }
-            if let b = outLine { mark(b, "OUT", -12) }
+            if let a = inLine { mark(a, overview ? "" : "IN", 12) }
+            if let b = outLine { mark(b, overview ? "" : "OUT", -12) }
         }
 
-        if soundReel { drawSoundReel(ctx, ed: ed, x: soundX, w: soundW, mm: mm, H: H, p: p, dir: dir, F: F, yOf: yOf) }
+        if soundReel { drawSoundReel(ctx, ed: ed, x: soundX, w: soundW, mm: soundW / Film35.width, H: H, p: p, dir: dir, F: F, yOf: yOf) }
 
         // the gate: lit aperture with corner brackets
         let cx = fx + filmW / 2
@@ -267,11 +289,11 @@ final class FilmStripNSView: NSView {
                                  locations: [0, 1]) {
             ctx.saveGState()
             ctx.clip(to: CGRect(x: fx - 20, y: gateY - cellH, width: filmW + 40, height: cellH * 2))
-            ctx.drawRadialGradient(glow, startCenter: CGPoint(x: cx, y: gateY), startRadius: 4,
+            ctx.drawRadialGradient(glow, startCenter: CGPoint(x: cx, y: gateY), startRadius: 0,
                                    endCenter: CGPoint(x: cx, y: gateY), endRadius: filmW * 0.9, options: [])
             ctx.restoreGState()
         }
-        let c: CGFloat = 10
+        let c: CGFloat = overview ? 5 : 10
         let g0 = CGPoint(x: picX - 4, y: gateY - picH / 2 - 4)
         let g1 = CGPoint(x: picX + picW + 4, y: gateY + picH / 2 + 4)
         ctx.setStrokeColor(.hex(0xE3A548)); ctx.setLineWidth(2); ctx.setLineCap(.butt)
@@ -291,17 +313,43 @@ final class FilmStripNSView: NSView {
             ctx.drawLinearGradient(fade, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: H * 0.12), options: [])
             ctx.drawLinearGradient(fade, start: CGPoint(x: 0, y: H), end: CGPoint(x: 0, y: H * 0.88), options: [])
         }
-        let arrow = (dir > 0 ? "▼" : "▲") as NSString
-        arrow.draw(at: CGPoint(x: W - 18, y: 6), withAttributes: rulerAttrs)
+        if overview {
+            drawZoomWindow(ctx, ed: ed, x0: fx - 3, x1: (soundReel ? soundX + soundW : fx + filmW) + 3, W: W, H: H)
+        } else {
+            let arrow = (dir > 0 ? "▼" : "▲") as NSString
+            arrow.draw(at: CGPoint(x: W - 18, y: 6), withAttributes: rulerAttrs)
+        }
     }
 
-    /// Aspect-fit a CGImage into a rect of this flipped view.
-    private func drawImage(_ ctx: CGContext, _ img: CGImage, contain r: CGRect) {
+    /// On the overview: outline the stretch the zoomed strip shows, dim the rest, and run lines from
+    /// the outline out to the zoomed strip's top and bottom, like a magnifier callout.
+    @MainActor
+    private func drawZoomWindow(_ ctx: CGContext, ed: Editor, x0: CGFloat, x1: CGFloat, W: CGFloat, H: CGFloat) {
+        guard ed.zoomedCellH > 0 else { return }
+        let half = H / 2 * cellH / ed.zoomedCellH
+        let box = CGRect(x: x0, y: gateY - half, width: x1 - x0, height: half * 2)
+        ctx.setFillColor(.hex(0x0F110F, 0.5))
+        ctx.fill(CGRect(x: 0, y: 0, width: W, height: max(0, box.minY)))
+        ctx.fill(CGRect(x: 0, y: box.maxY, width: W, height: max(0, H - box.maxY)))
+        let accent = CGColor.hex(0xE3A548)
+        ctx.setStrokeColor(accent); ctx.setLineWidth(2)
+        ctx.stroke(box.insetBy(dx: 1, dy: 1))
+        ctx.saveGState()
+        ctx.setStrokeColor(.hex(0xE3A548, 0.7)); ctx.setLineWidth(1); ctx.setLineDash(phase: 0, lengths: [3, 3])
+        ctx.move(to: CGPoint(x: box.maxX, y: box.minY + 1)); ctx.addLine(to: CGPoint(x: W, y: 0))
+        ctx.move(to: CGPoint(x: box.maxX, y: box.maxY - 1)); ctx.addLine(to: CGPoint(x: W, y: H))
+        ctx.strokePath()
+        ctx.restoreGState()
+    }
+
+    /// Fill a rect of this flipped view with a CGImage, cropping what overflows (no black bars).
+    private func drawImage(_ ctx: CGContext, _ img: CGImage, fill r: CGRect) {
         let iw = CGFloat(img.width), ih = CGFloat(img.height)
-        let s = min(r.width / iw, r.height / ih)
+        let s = max(r.width / iw, r.height / ih)
         let dw = iw * s, dh = ih * s
         let dst = CGRect(x: r.midX - dw / 2, y: r.midY - dh / 2, width: dw, height: dh)
         ctx.saveGState()
+        ctx.clip(to: r)
         ctx.translateBy(x: dst.minX, y: dst.maxY)
         ctx.scaleBy(x: 1, y: -1)
         ctx.interpolationQuality = .medium
@@ -340,13 +388,17 @@ final class FilmStripNSView: NSView {
             guard yb > 0, ya < H else { continue }
             let y0 = max(0, ya), y1 = min(H, yb)
             let env = ed.envelopes[c.sourceID]
-            let path = soundtrackPath(centerX: cx, halfWidth: halfW, y0: y0, y1: y1, step: step) { y in
+            // like an audio editor: a peak per pixel row, negative to the left and positive to the right,
+            // so the waveform comes out spiky rather than as a smooth outline
+            let rowSpan = Double(1 / cellH) / F
+            let path = waveformPath(centerX: cx, halfWidth: halfW, y0: y0, y1: y1, step: 1) { y in
                 let t = timeAt(y)
-                guard let env else { return 0.05 }
-                let a = c.start + (t - span / 2 - c.at), b = c.start + (t + span / 2 - c.at)
-                return max(env.level(0, from: a, to: b), env.level(1, from: a, to: b)) * Float(min(1.2, c.volume(atReel: t)))
+                guard let env else { return (0.03, 0.03) }
+                let a = c.start + (t - rowSpan / 2 - c.at), b = c.start + (t + rowSpan / 2 - c.at)
+                let g = Float(min(1.2, c.volume(atReel: t)))
+                return (env.level(1, from: a, to: b) * g, env.level(0, from: a, to: b) * g)
             }
-            ctx.setFillColor(.hex(0xEDE6D3, 0.85)); ctx.addPath(path); ctx.fillPath()
+            ctx.setFillColor(.hex(0xEDE6D3, 0.88)); ctx.addPath(path); ctx.fillPath()
 
             if c.id == ed.selectedMusicID {
                 ctx.setStrokeColor(.hex(0xE3A548)); ctx.setLineWidth(2)
@@ -364,7 +416,7 @@ final class FilmStripNSView: NSView {
                 ctx.strokePath()
             }
             let headY = yOf(c.at)
-            if headY > -20 && headY < H + 20, let name = ed.source(c.sourceID)?.name {
+            if !overview, headY > -20 && headY < H + 20, let name = ed.source(c.sourceID)?.name {
                 let s = ("♪ " + (name as NSString).deletingPathExtension) as NSString
                 let sz = s.size(withAttributes: labelAttrs)
                 let y = headY - dir * 9 - sz.height / 2
@@ -455,6 +507,15 @@ final class FilmStripNSView: NSView {
             } else {
                 ed.endDrag(fling: flick)
             }
+        }
+    }
+
+    /// Pinch to zoom the strip; it settles on the nearest step when the fingers lift.
+    override func magnify(with e: NSEvent) {
+        MainActor.assumeIsolated {
+            guard let ed = editor else { return }
+            ed.setZoom(ed.stripZoom * (1 + Double(e.magnification)), animated: false)
+            if e.phase == .ended || e.phase == .cancelled { ed.settleZoom() }
         }
     }
 

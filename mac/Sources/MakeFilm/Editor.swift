@@ -33,6 +33,10 @@ final class Editor {
     var musicSources: [AudioSource] = []
     var music: [MusicClip] = []
     var selectedMusicID: UUID?
+    /// Magnification of the strip (1 = off). Zoomed in, an overview reel appears on its left (see Zoom.swift).
+    var stripZoom: Double = 1
+    /// Height of one frame on the zoomed strip, so the overview can outline what it shows.
+    @ObservationIgnored var zoomedCellH: CGFloat = 0
     /// Play the sound while cranking the film by hand (View menu). Saved per user.
     var scrubAudio: Bool = UserDefaults.standard.object(forKey: "scrubAudio") as? Bool ?? true {
         didSet {
@@ -537,6 +541,9 @@ final class Editor {
         case "o": markOut()
         case "c": cutAtGate()
         case "x": liftAtGate()
+        case "z": toggleZoom()
+        case "=", "+", ";": zoomIn()
+        case "-": zoomOut()
         case "1": setMode(.source)
         case "2": setMode(.reel)
         default: return false

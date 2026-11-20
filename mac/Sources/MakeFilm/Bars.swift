@@ -69,6 +69,15 @@ struct HeaderBar: View {
                 Text(L("6 /秒")).tag(6); Text(L("12 /秒")).tag(12); Text(L("24 /秒")).tag(24)
             }
             .labelsHidden().frame(width: 90)
+            Text(L("拡大")).foregroundStyle(Theme.muted)
+            Picker("", selection: Binding(get: { Editor.zoomSteps.min { abs($0 - editor.stripZoom) < abs($1 - editor.stripZoom) } ?? 1 },
+                                          set: { editor.setZoom($0) })) {
+                ForEach(Editor.zoomSteps, id: \.self) { z in
+                    Text(verbatim: z == 1 ? L("等倍") : String(format: "%g×", z)).tag(z)
+                }
+            }
+            .labelsHidden().frame(width: 76)
+            .help(L("フィルムの一部を拡大する。左に全体のリールが出て、拡大している範囲を枠で示す（Z で切り替え、＋／−、ピンチ）"))
             Button(L("書き出し…")) { editor.openExport() }
                 .buttonStyle(FilmButtonStyle(primary: true))
                 .disabled(!editor.canExport)

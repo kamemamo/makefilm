@@ -108,7 +108,7 @@ extension Editor {
         guard envelopes[s.id] == nil else { return }
         let asset = s.asset, track = s.track, id = s.id
         Task.detached(priority: .utility) {
-            let env = await AudioEnvelope.make(asset: asset, track: track)
+            let env = await AudioEnvelope.make(asset: asset, track: track, detailed: true)
             await MainActor.run { if let env { self.envelopes[id] = env } }
         }
     }

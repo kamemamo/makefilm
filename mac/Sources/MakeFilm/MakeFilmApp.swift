@@ -39,6 +39,10 @@ struct MakeFilmApp: App {
                 Button(L("別名で保存…")) { editor.saveProjectAs() }.keyboardShortcut("s", modifiers: [.command, .shift])
             }
             CommandGroup(after: .toolbar) {
+                Button(L("フィルムを拡大")) { editor.zoomIn() }.keyboardShortcut("=")
+                Button(L("フィルムを縮小")) { editor.zoomOut() }.keyboardShortcut("-")
+                Button(L("フィルムを等倍に")) { editor.setZoom(1) }.keyboardShortcut("0")
+                Divider()
                 Toggle(L("手回し中に音を出す"), isOn: Binding(get: { editor.scrubAudio }, set: { editor.scrubAudio = $0 }))
             }
             CommandGroup(replacing: .pasteboard) {
@@ -88,17 +92,33 @@ struct ContentView: View {
         VStack(spacing: 0) {
             HeaderBar(editor: editor)
             Divider().overlay(Theme.line)
-            HStack(spacing: 0) {
-                FilmStripView(editor: editor)
-                    .frame(width: editor.mode == .reel ? 400 : 250)   // the reel gets a sound reel beside it
-                    .frame(maxHeight: .infinity)
-                    .clipped()
-                Divider().overlay(Theme.line)
-                ViewerView(editor: editor)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                Divider().overlay(Theme.line)
-                MediaPanel(editor: editor)
-                    .frame(width: 260)
+            GeometryReader { geo in
+                let reel = editor.mode == .reel
+                let base: CGFloat = reel ? 400 : 250              // the reel gets a sound reel beside it
+                let overviewW: CGFloat = editor.isZoomed ? (reel ? 150 : 96) : 0
+                // Zoomed, the strip grows and pushes the viewer over, but always leaves the viewer some room.
+                let room = geo.size.width - 260 - overviewW - 380
+                let stripW = max(base, min(base * CGFloat(editor.stripZoom), room))
+                HStack(spacing: 0) {
+                    if editor.isZoomed {
+                        FilmStripView(editor: editor, overview: true)
+                            .frame(width: overviewW)
+                            .frame(maxHeight: .infinity)
+                            .clipped()
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                        Divider().overlay(Theme.line)
+                    }
+                    FilmStripView(editor: editor)
+                        .frame(width: stripW)
+                        .frame(maxHeight: .infinity)
+                        .clipped()
+                    Divider().overlay(Theme.line)
+                    ViewerView(editor: editor)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Divider().overlay(Theme.line)
+                    MediaPanel(editor: editor)
+                        .frame(width: 260)
+                }
             }
             Divider().overlay(Theme.line)
             TransportBar(editor: editor)

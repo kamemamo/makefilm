@@ -43,10 +43,12 @@ enum TC {
         return String(format: "%02d:%02d:%02d:%02d", hh, mm, ss, ff)
     }
 
-    /// 35mm footage: 16 frames per foot at 24 fps.
+    /// 35mm footage at 24 fps, 3-perf: 64 perforations to the foot, so a foot holds 21⅓ frames.
+    /// Feet + frames into that foot.
     static func feet(_ seconds: Double) -> String {
         let fr = Int((max(seconds, 0) * 24 + 1e-6).rounded(.down))
-        return String(format: "%d+%02d", fr / 16, fr % 16)
+        let perfs = fr * Film35.perfsPerFrame
+        return String(format: "%d+%02d", perfs / 64, (perfs % 64) / Film35.perfsPerFrame)
     }
 }
 

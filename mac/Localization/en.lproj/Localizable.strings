@@ -153,3 +153,9 @@
 "削除" = "Delete";
 "選んでいる曲（の片）をサウンドリールから削除する（⌫ または ⇧X）" = "Delete the selected music (piece) from the sound reel (⌫ or ⇧X)";
 "曲を削除して詰めました" = "Deleted the music and closed the gap";
+"拡大" = "Zoom";
+"等倍" = "1×";
+"フィルムを拡大" = "Zoom In on Film";
+"フィルムを縮小" = "Zoom Out on Film";
+"フィルムを等倍に" = "Actual Size Film";
+"フィルムの一部を拡大する。左に全体のリールが出て、拡大している範囲を枠で示す（Z で切り替え、＋／−、ピンチ）" = "Zoom in on part of the film. The whole reel appears on the left with the zoomed stretch outlined (Z toggles, + / −, pinch)";

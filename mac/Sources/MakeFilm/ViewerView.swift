@@ -22,7 +22,8 @@ final class PlayerNSView: NSView {
         wantsLayer = true
         layer = CALayer()
         layer?.backgroundColor = NSColor.black.cgColor
-        playerLayer.videoGravity = .resizeAspect
+        playerLayer.videoGravity = .resizeAspectFill     // the picture fills the frame, like the strip
+        layer?.masksToBounds = true
         layer?.addSublayer(playerLayer)
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -35,7 +36,7 @@ final class PlayerNSView: NSView {
 }
 
 /// The Moviola's viewing hood. The picture is the gate on one continuous piece of 35mm print film,
-/// drawn to real proportions: perforations at both edges (4 per frame), the optical soundtrack beside
+/// drawn to real proportions: perforations at both edges (3 per frame), the optical soundtrack beside
 /// the picture, and the neighbouring frames peeking out above and below.
 struct ViewerView: View {
     let editor: Editor
@@ -155,8 +156,8 @@ struct FilmSurroundView: View {
             let top = yc - fh / 2
             guard top < size.height, top + fh > 0 else { continue }
 
-            // 4 perforations per frame on each edge (KS, wider than tall)
-            for j in 0..<4 {
+            // 3 perforations per frame on each edge (KS, wider than tall)
+            for j in 0..<Film35.perfsPerFrame {
                 let py = top + (CGFloat(j) + 0.5) * Film35.perfPitch * mm - perfH / 2
                 for x in [Film35.perfLeftX * mm, Film35.perfRightX * mm] {
                     gc.fill(Path(roundedRect: CGRect(x: x, y: py, width: perfW, height: perfH), cornerRadius: perfR),
@@ -170,10 +171,12 @@ struct FilmSurroundView: View {
                 gc.fill(Path(r), with: .color(.black))
                 let idx = editor.thumbs.index(for: l.src)
                 if let img = editor.thumbs.peek(l.segment.mediaID, idx) ?? editor.thumbs.keepImage(l.segment.mediaID, idx) {
-                    let s = min(r.width / CGFloat(img.width), r.height / CGFloat(img.height))
+                    let s = max(r.width / CGFloat(img.width), r.height / CGFloat(img.height))
                     let w = CGFloat(img.width) * s, h = CGFloat(img.height) * s
-                    gc.draw(Image(decorative: img, scale: 1).resizable(),
-                            in: CGRect(x: r.midX - w / 2, y: r.midY - h / 2, width: w, height: h))
+                    var g = gc
+                    g.clip(to: Path(r))
+                    g.draw(Image(decorative: img, scale: 1).resizable(),
+                           in: CGRect(x: r.midX - w / 2, y: r.midY - h / 2, width: w, height: h))
                 }
                 // edge print: the timecode of this frame, outside the perforations
                 let label = Text(TC.string(Double(c) / F, fps: editor.engine.fps)).font(edge).foregroundStyle(Theme.accent.opacity(0.7))

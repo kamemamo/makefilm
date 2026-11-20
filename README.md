@@ -8,8 +8,8 @@ When the cut is done, hand it over to Final Cut Pro, Premiere Pro or DaVinci Res
 
 ## Features
 
-- **Vertical film strip** — the strip on the left has perforations (4 per frame), a seconds ruler and grease-pencil IN/OUT marks. Drag or scroll to crank it, with inertia. The film can run up (default) or down (Moviola style)
-- **Optical soundtrack** — the audio is drawn as a two-track bilateral variable-area soundtrack between the left perforations and the picture, just like on a 35mm print. Strip and viewer use real 35mm print proportions (Academy frame, KS perforations at the edges)
+- **Vertical film strip** — the strip on the left has perforations (3 per frame), a seconds ruler and grease-pencil IN/OUT marks. Drag or scroll to crank it, with inertia. The film can run up (default) or down (Moviola style)
+- **Optical soundtrack** — the audio is drawn as a two-track bilateral variable-area soundtrack between the left perforations and the picture, just like on a 35mm print. Strip and viewer use real 35mm proportions (3-perf frames with thin frame lines, KS perforations at the edges)
 - **The viewer is a gate** — the picture sits on a continuous strip of film, with the previous and next frames above and below, perforations and the timecode printed along the edge. While playing, the film advances a frame at a time like a projector's claw
 - **Pedal** — speeds from −4× to 4×, true reverse playback and frame-accurate stepping (native AVFoundation playback)
 - **Scratch while cranking** — drag, scroll or fling the film and the sound follows your hand sample by sample, forwards and backwards, pitch rising with speed — like rocking film over a Moviola sound head or scratching a record (toggle in the View menu)
