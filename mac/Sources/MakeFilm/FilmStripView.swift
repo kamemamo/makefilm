@@ -316,28 +316,19 @@ final class FilmStripNSView: NSView {
     private var musicDrag: UUID?
     private var musicUndoPushed = false
 
-    /// Magnetic sound film beside the picture: perforations, oxide coat, the music as a waveform,
+    /// Magnetic sound tape beside the picture (oxide coat, no perforations), the music as a waveform,
     /// grease-pencil lines at each clip's head and tail. The selected clip is outlined.
     @MainActor
     private func drawSoundReel(_ ctx: CGContext, ed: Editor, x sx: CGFloat, w: CGFloat, mm: CGFloat, H: CGFloat,
                                p: Double, dir: CGFloat, F: Double, yOf: (Double) -> CGFloat) {
-        ctx.setFillColor(.hex(0x3A2210)); ctx.fill(CGRect(x: sx, y: 0, width: w, height: H))
-        ctx.setFillColor(.hex(0x55311A)); ctx.fill(CGRect(x: sx + 5.6 * mm, y: 0, width: w - 11.2 * mm, height: H))   // oxide
-        // perforations, in step with the picture frames
-        let ph = Film35.perfH * mm, pw = Film35.perfW * mm, pr = Film35.perfCorner * mm
-        let kc = Int(p.rounded(.down)), half = Int((H / 2 / cellH).rounded(.up)) + 1
-        ctx.setFillColor(.hex(0x0F110F))
-        for k in (kc - half)...(kc + half) {
-            let y0 = gateY - dir * (CGFloat(k) + 0.5 - CGFloat(p)) * cellH - cellH / 2
-            for j in 0..<4 {
-                let py = y0 + (CGFloat(j) + 0.5) * Film35.perfPitch * mm - ph / 2
-                ctx.addPath(CGPath(roundedRect: CGRect(x: sx + Film35.perfLeftX * mm, y: py, width: pw, height: ph), cornerWidth: pr, cornerHeight: pr, transform: nil))
-                ctx.addPath(CGPath(roundedRect: CGRect(x: sx + Film35.perfRightX * mm, y: py, width: pw, height: ph), cornerWidth: pr, cornerHeight: pr, transform: nil))
-            }
-        }
-        ctx.fillPath()
+        // magnetic tape: no perforations, just the oxide coat with a faint sheen along the edges
+        ctx.setFillColor(.hex(0x4A2B15)); ctx.fill(CGRect(x: sx, y: 0, width: w, height: H))
+        ctx.setFillColor(.hex(0x5A3418)); ctx.fill(CGRect(x: sx + 1.5 * mm, y: 0, width: w - 3 * mm, height: H))
+        ctx.setFillColor(.hex(0xFFD9A8, 0.06))
+        ctx.fill(CGRect(x: sx + 1, y: 0, width: 1, height: H))
+        ctx.fill(CGRect(x: sx + w - 2, y: 0, width: 1, height: H))
 
-        let cx = sx + w / 2, halfW = 10.5 * mm
+        let cx = sx + w / 2, halfW = 13 * mm
         let step: CGFloat = 2, span = Double(step / cellH) / F
         let timeAt: (CGFloat) -> Double = { [cellH, gateY] y in (p - Double((y - gateY) / (dir * cellH))) / F }
         let grease = CGColor.hex(0xF6EEB4)
@@ -359,7 +350,7 @@ final class FilmStripNSView: NSView {
 
             if c.id == ed.selectedMusicID {
                 ctx.setStrokeColor(.hex(0xE3A548)); ctx.setLineWidth(2)
-                ctx.stroke(CGRect(x: sx + 5.6 * mm + 1, y: y0, width: w - 11.2 * mm - 2, height: y1 - y0))
+                ctx.stroke(CGRect(x: sx + 2 * mm, y: y0, width: w - 4 * mm, height: y1 - y0))
             }
             // head and tail in grease pencil, name at the head
             ctx.setStrokeColor(grease); ctx.setLineWidth(2); ctx.setLineCap(.round)
@@ -378,8 +369,8 @@ final class FilmStripNSView: NSView {
                 let sz = s.size(withAttributes: labelAttrs)
                 let y = headY - dir * 9 - sz.height / 2
                 ctx.saveGState()
-                ctx.clip(to: CGRect(x: sx + 6 * mm, y: 0, width: w - 12 * mm, height: H))
-                s.draw(at: CGPoint(x: sx + 6.5 * mm, y: y), withAttributes: labelAttrs)
+                ctx.clip(to: CGRect(x: sx + 2.5 * mm, y: 0, width: w - 5 * mm, height: H))
+                s.draw(at: CGPoint(x: sx + 3 * mm, y: y), withAttributes: labelAttrs)
                 ctx.restoreGState()
             }
         }
