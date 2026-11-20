@@ -3,8 +3,8 @@ import SwiftUI
 /// Zooming the strip: the strip itself is magnified, a narrow overview reel appears on its left with
 /// the zoomed stretch outlined, and the viewer slides over to make room.
 extension Editor {
-    static let zoomSteps: [Double] = [1, 1.5, 2, 3, 4]
-    static let zoomRange: ClosedRange<Double> = 1...4
+    static let zoomSteps: [Double] = [1, 1.5, 2]
+    static let zoomRange: ClosedRange<Double> = 1...2
 
     var isZoomed: Bool { stripZoom > 1.01 }
 
