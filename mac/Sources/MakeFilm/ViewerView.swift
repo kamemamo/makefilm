@@ -157,7 +157,7 @@ struct FilmSurroundView: View {
             guard top < size.height, top + fh > 0 else { continue }
 
             // 3 perforations per frame on each edge (KS, wider than tall)
-            for j in 0..<Film35.perfsPerFrame {
+            for j in 0..<(Film35.perforated ? Film35.perfsPerFrame : 0) {
                 let py = top + (CGFloat(j) + 0.5) * Film35.perfPitch * mm - perfH / 2
                 for x in [Film35.perfLeftX * mm, Film35.perfRightX * mm] {
                     gc.fill(Path(roundedRect: CGRect(x: x, y: py, width: perfW, height: perfH), cornerRadius: perfR),
@@ -181,7 +181,7 @@ struct FilmSurroundView: View {
                 // edge print: the timecode of this frame, outside the perforations
                 let label = Text(TC.string(Double(c) / F, fps: editor.engine.fps)).font(edge).foregroundStyle(Theme.accent.opacity(0.7))
                 var g = gc
-                g.translateBy(x: Film35.perfLeftX * mm * 0.45, y: yc)
+                g.translateBy(x: Film35.edgePrintX * mm, y: yc)
                 g.rotate(by: .degrees(-90))
                 g.draw(label, at: .zero)
             } else {

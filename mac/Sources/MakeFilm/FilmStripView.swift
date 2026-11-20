@@ -146,7 +146,7 @@ final class FilmStripNSView: NSView {
 
             // perforations: 3 per frame each side (3-perf 35mm)
             ctx.setFillColor(.hex(0x0F110F))
-            for j in 0..<Film35.perfsPerFrame {
+            for j in 0..<(Film35.perforated ? Film35.perfsPerFrame : 0) {
                 let py = y0 + (CGFloat(j) + 0.5) * Film35.perfPitch * mm - ph / 2
                 ctx.addPath(CGPath(roundedRect: CGRect(x: fx + Film35.perfLeftX * mm, y: py, width: pw, height: ph),
                                    cornerWidth: pr, cornerHeight: pr, transform: nil))
