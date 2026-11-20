@@ -212,13 +212,21 @@ extension Editor {
         removeMusic(c.id)
     }
 
+    /// Delete a piece of music and close the gap: everything laid after it slides up by its length
+    /// (never back past where the deleted piece began), so the sound reel stays joined.
     func removeMusic(_ id: UUID) {
-        guard music.contains(where: { $0.id == id }) else { return }
+        guard let gone = music.first(where: { $0.id == id }) else { return }
         pushUndo()
         music.removeAll { $0.id == id }
+        let f = engine.fps
+        for i in music.indices where music[i].at >= gone.at {
+            let shift = min(gone.length, music[i].at - gone.at)
+            music[i].at = max(0, ((music[i].at - shift) * f).rounded() / f)
+        }
+        music.sort { $0.at < $1.at }
         if selectedMusicID == id { selectedMusicID = nil }
         musicChanged()
-        toast(L("曲を削除しました"))
+        toast(L("曲を削除して詰めました"))
     }
 
     /// Music clip under a reel time (the last one placed wins where they overlap).

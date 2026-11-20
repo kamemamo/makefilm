@@ -152,4 +152,4 @@
 "曲を切る" = "Cut Music";
 "削除" = "Delete";
 "選んでいる曲（の片）をサウンドリールから削除する（⌫ または ⇧X）" = "Delete the selected music (piece) from the sound reel (⌫ or ⇧X)";
-"曲を削除しました" = "Deleted the music";
+"曲を削除して詰めました" = "Deleted the music and closed the gap";
