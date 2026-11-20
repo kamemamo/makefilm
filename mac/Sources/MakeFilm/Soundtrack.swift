@@ -42,12 +42,12 @@ struct FilmGeometry {
 
 /// Eases the film into the gate when it comes to rest, instead of jumping the last fraction of a
 /// frame. While the film is moving it follows exactly; at rest it glides to the frame's centre
-/// (about 0.15 s), like a film settling on the register pin. Far jumps (a click elsewhere) cut.
+/// (about 0.25 s), like a film settling on the register pin. Far jumps (a click elsewhere) cut.
 @MainActor
 final class GateSettle {
     private var shown: Double?
     private var lastT: CFTimeInterval = 0
-    static let tau = 0.045                       // seconds; ~0.15 s to settle
+    static let tau = 0.08                        // seconds; ~0.25 s to settle
 
     /// `target`: where the film should be (cells); `moving`: the hand or the motor is driving it.
     func position(target: Double, moving: Bool, now: CFTimeInterval = CACurrentMediaTime()) -> Double {
