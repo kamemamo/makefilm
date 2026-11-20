@@ -23,9 +23,10 @@ final class Editor {
     var stripRate: Double { stripFPS == 0 ? max(1, engine.fps) : Double(stripFPS) }
     /// Keep the thumbnails in step with the density (the material's rate changes with what's loaded).
     func syncStripRate() {
-        guard abs(thumbs.fps - stripRate) > 1e-6 else { return }
+        guard abs(thumbs.fps - stripRate) > 1e-6 || abs(thumbsHi.fps - stripRate) > 1e-6 else { return }
         thumbs.fps = stripRate
-        for m in media { thumbs.updateMaxIndex(m) }
+        thumbsHi.fps = stripRate
+        for m in media { thumbs.updateMaxIndex(m); thumbsHi.updateMaxIndex(m) }
         thumbVersion += 1
     }
     var activeSegmentIndex = -1
@@ -65,6 +66,8 @@ final class Editor {
     // MARK: per-frame state (not observed)
     @ObservationIgnored let engine = PlaybackEngine()
     @ObservationIgnored let thumbs = ThumbnailStore()
+    /// Sharp frames for the zoomed strip (sized to what it draws, a few dozen kept).
+    @ObservationIgnored let thumbsHi = ThumbnailStore(maxPixel: 960, budget: 400_000_000)
     /// Audio peaks per clip for the optical soundtrack (filled in the background).
     @ObservationIgnored var envelopes: [UUID: AudioEnvelope] = [:]
     @ObservationIgnored var dragging = false
@@ -135,6 +138,7 @@ final class Editor {
                     let m = try await MediaClip.load(url: url)
                     media.append(m)
                     thumbs.register(m)
+                    thumbsHi.register(m)
                     loadEnvelope(for: m)
                     select(m.id)
                 } catch {

@@ -3,8 +3,26 @@ import CoreGraphics
 
 /// Lazily generates small frames for the film strip and bin.
 /// Requests are made every draw; the worker always picks the frame nearest the gate first.
+/// A second, sharp store (`Editor.thumbsHi`) makes large frames for the zoomed strip.
 @MainActor
 final class ThumbnailStore {
+    /// Longest side of the generated frames, in pixels. Changing it starts the cache over.
+    var maxPixel: CGFloat {
+        didSet {
+            guard oldValue != maxPixel else { return }
+            for g in generators.values { g.maximumSize = CGSize(width: maxPixel, height: maxPixel) }
+            reset()
+        }
+    }
+    /// How many frames to keep: about `budget` bytes' worth at the current size (16:9 frames).
+    private let budget: Double
+    private var cap: Int { max(40, min(4000, Int(budget / Double(maxPixel * maxPixel * 9 / 16 * 4)))) }
+
+    init(maxPixel: CGFloat = 240, budget: Double = 1_000_000_000) {
+        self.maxPixel = maxPixel
+        self.budget = budget
+    }
+
     struct Key: Hashable { let media: UUID; let index: Int }
 
     /// Strip cells per second (thumbnails are made one per cell). May be fractional (29.97).
@@ -23,12 +41,11 @@ final class ThumbnailStore {
     private var generators: [UUID: AVAssetImageGenerator] = [:]
     private var maxIndex: [UUID: Int] = [:]
     private var working: Set<UUID> = []
-    private let cap = 4000
 
     func register(_ m: MediaClip) {
         let g = AVAssetImageGenerator(asset: m.asset)
         g.appliesPreferredTrackTransform = true
-        g.maximumSize = CGSize(width: 240, height: 240)
+        g.maximumSize = CGSize(width: maxPixel, height: maxPixel)
         generators[m.id] = g
         maxIndex[m.id] = Int(((m.duration - 0.001) * fps).rounded(.down))
         applyTolerance()

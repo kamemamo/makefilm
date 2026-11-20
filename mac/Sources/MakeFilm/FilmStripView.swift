@@ -132,6 +132,14 @@ final class FilmStripNSView: NSView {
         let yOf: (Double) -> CGFloat = { [cellH, gateY] t in gateY - dir * CGFloat(t * F - p) * cellH }
         let thumbs = ed.thumbs
         thumbs.beginFrame()
+        // Big frames (zoomed in) come from the sharp store, sized to the pixels they cover;
+        // the small frame stands in until the sharp one arrives.
+        let needPx = picW * (window?.backingScaleFactor ?? 2)
+        let hi: ThumbnailStore? = !overview && needPx > 300 ? ed.thumbsHi : nil
+        if let hi {
+            hi.maxPixel = [480, 640, 960, 1280, 1600].first { $0 >= needPx } ?? 1600
+            hi.beginFrame()
+        }
 
         if loupe { ctx.saveGState(); ctx.clip(to: colRect) }
         // film base
@@ -159,6 +167,7 @@ final class FilmStripNSView: NSView {
                 if inRange && (ahead == 0 || (k - kc).signum() == ahead),
                    let l = locate((Double(k) + 0.5) / F, in: segs) {
                     _ = thumbs.request(l.segment.mediaID, thumbs.index(for: l.src))
+                    if let hi, abs(k - kc) <= half + 3 { _ = hi.request(l.segment.mediaID, hi.index(for: l.src)) }
                 }
                 continue
             }
@@ -178,9 +187,9 @@ final class FilmStripNSView: NSView {
             if inRange, let l = locate((Double(k) + 0.5) / F, in: segs) {
                 let idx = thumbs.index(for: l.src)
                 let d = abs(Double(k) + 0.5 - p)
-                if d < bestD { bestD = d; thumbs.setFocus(l.segment.mediaID, idx) }
+                if d < bestD { bestD = d; thumbs.setFocus(l.segment.mediaID, idx); hi?.setFocus(l.segment.mediaID, idx) }
                 ctx.setFillColor(.hex(0x000000)); ctx.fill(frame)
-                if let img = thumbs.request(l.segment.mediaID, idx) {
+                if let img = hi?.request(l.segment.mediaID, idx) ?? thumbs.request(l.segment.mediaID, idx) {
                     drawImage(ctx, img, fill: frame)
                 } else {
                     ctx.setFillColor(.hex(0x1A120A)); ctx.fill(frame)
@@ -209,6 +218,7 @@ final class FilmStripNSView: NSView {
             }
         }
         thumbs.endFrame()
+        hi?.endFrame()
 
         // optical soundtrack: two bilateral variable-area tracks between the left perfs and the picture
         do {

@@ -61,7 +61,7 @@ extension Editor {
     func newProject() {
         guard confirmDiscardIfNeeded() else { return }
         stop()
-        thumbs.removeAll()
+        thumbs.removeAll(); thumbsHi.removeAll()
         envelopes.removeAll()
         media = []; reel = []; undoStack = []; redoStack = []
         musicSources = []; music = []; selectedMusicID = nil
@@ -128,9 +128,9 @@ extension Editor {
 
         stripFPS = [0, 6, 12, 24].contains(file.stripFPS) ? file.stripFPS : 0
         direction = file.direction >= 0 ? 1 : -1
-        thumbs.removeAll()
+        thumbs.removeAll(); thumbsHi.removeAll()
         envelopes.removeAll()
-        for c in loaded { thumbs.register(c); loadEnvelope(for: c) }
+        for c in loaded { thumbs.register(c); thumbsHi.register(c); loadEnvelope(for: c) }
         let ids = Set(loaded.map(\.id))
         media = loaded
         reel = file.reel.filter { ids.contains($0.mediaID) }
