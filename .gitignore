@@ -11,3 +11,6 @@ xcuserdata/
 # exported reels
 *.mov
 *.webm
+
+# local listening test
+/scratch-demo.wav

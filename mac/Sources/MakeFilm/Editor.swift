@@ -35,7 +35,11 @@ final class Editor {
     var selectedMusicID: UUID?
     /// Play the sound while cranking the film by hand (View menu). Saved per user.
     var scrubAudio: Bool = UserDefaults.standard.object(forKey: "scrubAudio") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(scrubAudio, forKey: "scrubAudio"); if !scrubAudio { engine.endCrank() } }
+        didSet {
+            UserDefaults.standard.set(scrubAudio, forKey: "scrubAudio")
+            if !scrubAudio { engine.endCrank(); scratch.end() }
+            reloadPlayer(at: time)
+        }
     }
     /// Cuts copied with ⌘C (kept for the session).
     var cutClipboard: [Segment] = []
@@ -56,6 +60,10 @@ final class Editor {
     @ObservationIgnored var fling: Double = 0
     /// When the film was last cranked by hand (drag / scroll), for drawing it continuously meanwhile.
     @ObservationIgnored var lastCrankAt: CFTimeInterval = 0
+    /// Scratch-style sound while cranking (see ScratchAudio).
+    @ObservationIgnored let scratch = ScratchAudio()
+    @ObservationIgnored var scratchTask: Task<Void, Never>?
+    @ObservationIgnored var scratching = false
     @ObservationIgnored private var lastTick: CFTimeInterval = 0
     @ObservationIgnored private var manualSpeed: Double = 0
     @ObservationIgnored var reelTime: Double = 0
@@ -144,20 +152,22 @@ final class Editor {
         switch mode {
         case .source:
             guard let m = currentMedia else {
-                engine.setItem(nil, duration: 0, fps: 24, at: 0); return
+                engine.setItem(nil, duration: 0, fps: 24, at: 0); prepareScratch(nil, mix: nil); return
             }
             let item = AVPlayerItem(asset: m.asset)
             item.audioTimePitchAlgorithm = .varispeed      // pitch follows speed, like a Moviola
             engine.setItem(item, duration: m.duration, fps: m.fps, at: t)
+            prepareScratch(m.asset, mix: nil)
         case .reel:
             guard let c = ReelComposition.build(reel, clips: clipMap, music: music, sources: sourceMap, extendToMusic: true) else {
-                engine.setItem(nil, duration: 0, fps: 24, at: 0); return
+                engine.setItem(nil, duration: 0, fps: 24, at: 0); prepareScratch(nil, mix: nil); return
             }
             let item = AVPlayerItem(asset: c.composition)
             item.videoComposition = c.videoComposition
             item.audioMix = c.audioMix
             item.audioTimePitchAlgorithm = .varispeed
             engine.setItem(item, duration: c.duration, fps: c.fps, at: t)
+            prepareScratch(c.composition, mix: c.audioMix)
         }
         snap()
         activeSegmentIndex = -1
@@ -178,6 +188,7 @@ final class Editor {
         guard engine.duration > 0 else { return }
         if s == 0 { stop(); return }
         fling = 0
+        if scratching { scratching = false; scratch.end() }
         if s > 0 && time >= engine.duration - 0.05 { engine.scrub(to: 0) }
         if s < 0 && time <= 0.01 { engine.scrub(to: engine.duration) }
         if engine.canPlay(rate: s) {
@@ -233,7 +244,34 @@ final class Editor {
     func scrub(by delta: Double) {
         lastCrankAt = CACurrentMediaTime()
         if speed != 0 { stop() }
-        if scrubAudio { engine.crank(to: time + delta) } else { engine.scrub(to: time + delta) }
+        crankMove(to: time + delta)
+    }
+
+    /// Move the film by hand. With sound on, the scratch engine follows the hand (forwards and
+    /// backwards); until its audio is decoded, the player runs at the hand's speed instead.
+    private func crankMove(to t: Double) {
+        if scrubAudio && scratch.isReady {
+            if !scratching { scratching = true; scratch.begin(at: time) }
+            engine.scrub(to: t)                 // the picture follows by seeking
+            scratch.follow(time)
+        } else if scrubAudio {
+            engine.crank(to: t)
+        } else {
+            engine.scrub(to: t)
+        }
+    }
+
+    /// Decode the sequence's audio for scratching (in the background; the previous one is dropped).
+    private func prepareScratch(_ asset: AVAsset?, mix: AVAudioMix?) {
+        scratchTask?.cancel()
+        let g = scratch.nextGeneration()
+        scratching = false
+        let sc = scratch
+        guard let asset, scrubAudio else { sc.setAudio(nil, generation: g); return }
+        scratchTask = Task.detached(priority: .utility) {
+            let pcm = await ScratchAudio.decode(asset, audioMix: mix)
+            await MainActor.run { sc.setAudio(pcm, generation: g) }
+        }
     }
 
     func endDrag(fling v: Double?) {
@@ -258,11 +296,16 @@ final class Editor {
                 snap()
             }
         } else if fling != 0 && !dragging {
-            if scrubAudio { lastCrankAt = now; engine.crank(to: time + fling * dt) } else { engine.scrub(to: time + fling * dt) }
+            if scrubAudio { lastCrankAt = now }
+            crankMove(to: time + fling * dt)
             fling *= pow(0.9, dt * 60)
             if abs(fling) < 0.02 || time <= 0 || time >= engine.duration - 0.001 { fling = 0; snap() }
         }
         // the hand stopped (no drag / scroll for a moment): settle on the frame
+        if scratching && !dragging && fling == 0 && now - lastCrankAt > 0.15 {
+            scratching = false
+            scratch.end()
+        }
         if engine.cranking {
             engine.crankTick(dt: dt, idle: !dragging && fling == 0 && now - lastCrankAt > 0.15)
             if !engine.cranking { snap() }
