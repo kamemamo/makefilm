@@ -1,4 +1,5 @@
 import AVFoundation
+import QuartzCore
 
 /// Wraps AVPlayer. While stopped/scrubbing the playhead is our own `target`
 /// (so the strip responds instantly) and seeks chase it with zero tolerance.
@@ -9,6 +10,17 @@ final class PlaybackEngine {
         p.actionAtItemEnd = .pause
         return p
     }()
+
+    /// Player position as last reported by a periodic observer. Asking `currentTime()` right after
+    /// the player starts can block the main thread for up to a second, so cranking reads this instead.
+    private var observedTime: Double = 0
+    private var timeObserver: Any?
+
+    init() {
+        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 60), queue: .main) { [weak self] t in
+            MainActor.assumeIsolated { self?.observedTime = t.seconds }
+        }
+    }
 
     private(set) var duration: Double = 0
     private(set) var fps: Double = 24
@@ -22,6 +34,11 @@ final class PlaybackEngine {
     private(set) var cranking = false
     private var crankLast: Double = 0
     private var crankVel: Double = 0
+    private var coasting = false
+    private var lastInputAt: CFTimeInterval = 0
+    private var lastCrankTickAt: CFTimeInterval = 0
+    private var crankWatchdog: Timer?
+    private func now() -> CFTimeInterval { CACurrentMediaTime() }
 
     /// Current playhead in sequence seconds.
     var time: Double {
@@ -47,7 +64,7 @@ final class PlaybackEngine {
     func clamp(_ t: Double) -> Double { min(max(t, 0), max(duration - 0.0005, 0)) }
 
     func scrub(to t: Double) {
-        if cranking { cranking = false; crankVel = 0; player.pause() }
+        if cranking { cranking = false; coasting = false; crankVel = 0; player.pause() }
         target = clamp(t)
         guard player.currentItem != nil else { return }
         pendingSeek = target
@@ -74,25 +91,64 @@ final class PlaybackEngine {
 
     /// Move the playhead by hand; `crankTick` makes the player follow at the same speed, so it sounds.
     func crank(to t: Double) {
-        if !cranking { cranking = true; crankLast = target; crankVel = 0 }
+        if !cranking {
+            cranking = true; coasting = false; crankLast = target; crankVel = 0; lastInputAt = now(); lastCrankTickAt = now()
+            // If frame updates stop (window hidden or on another Space), don't leave the player running.
+            crankWatchdog?.invalidate()
+            crankWatchdog = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if self.cranking && self.now() - self.lastCrankTickAt > 0.3 { self.endCrank() }
+                }
+            }
+        }
         target = clamp(t)
     }
 
     /// Called every display frame while cranking. Forward motion plays (pitch follows speed, like a
-    /// Moviola); backwards or barely moving is silent and the picture just follows. `idle` ends it.
+    /// Moviola); backwards or barely moving is silent and the picture just follows.
+    ///
+    /// Tuned for Bluetooth headphones, which hear audio 0.2–0.3 s late and lose it on every pause/seek:
+    /// - while the hand moves, the player keeps running and catches up by changing speed, not by seeking
+    ///   (it only re-seeks if it falls more than half a second behind);
+    /// - when the hand stops (`idle`), the film coasts to a halt over about 0.4 s instead of cutting off,
+    ///   and the picture coasts with it.
     func crankTick(dt: Double, idle: Bool) {
         guard cranking, dt > 0 else { return }
-        let v = (target - crankLast) / dt
-        crankLast = target
-        crankVel = crankVel * 0.7 + v * 0.3
-        if idle { endCrank(); return }
-        let rate = Float(min(3, crankVel))
-        if rate > 0.1 {
-            let cur = player.currentTime().seconds
-            if player.rate == 0 || !cur.isFinite || abs(cur - target) > 0.2 {
-                player.seek(to: cm(target), toleranceBefore: cm(0.02), toleranceAfter: cm(0.02))
+        lastCrankTickAt = now()
+        if idle && !coasting { coasting = true }
+        if !idle && coasting { coasting = false }
+
+        if coasting {
+            // ease the speed down; the playhead follows the player so nothing jumps at the end
+            crankVel *= pow(0.9, dt * 60)          // ~0.4 s from normal speed to a stop
+            if player.rate > 0, observedTime.isFinite {
+                target = clamp(max(target, observedTime)); crankLast = target
             }
-            player.rate = rate
+            if crankVel < 0.08 || player.rate <= 0 { endCrank(); return }
+            player.rate = Float(crankVel)
+            return
+        }
+
+        // Scroll and drag events arrive in bursts: only update the speed when the hand actually moved,
+        // and hold it in between so playback (and the sound) doesn't stutter to a stop.
+        if abs(target - crankLast) > 1e-6 {
+            let v = (target - crankLast) / max(dt, now() - lastInputAt)
+            crankVel = crankVel == 0 ? v : crankVel * 0.6 + v * 0.4
+            crankLast = target
+            lastInputAt = now()
+        }
+        if crankVel > 0.1 {
+            let cur = observedTime
+            if player.rate == 0 || !cur.isFinite || abs(cur - target) > 0.5 {
+                player.seek(to: cm(target), toleranceBefore: cm(0.04), toleranceAfter: cm(0.04))
+                observedTime = target
+                player.rate = Float(min(3, crankVel))
+            } else {
+                // steer: run a little faster or slower to close the gap, keeping the sound continuous
+                let steer = (target - cur) * 1.5
+                player.rate = Float(min(3, max(0.15, crankVel + steer)))
+            }
         } else {
             if player.rate != 0 { player.pause() }
             pendingSeek = target
@@ -102,8 +158,10 @@ final class PlaybackEngine {
 
     /// Stop cranking and settle exactly on the target frame.
     func endCrank() {
+        crankWatchdog?.invalidate(); crankWatchdog = nil
         guard cranking else { return }
         cranking = false
+        coasting = false
         crankVel = 0
         player.pause()
         pendingSeek = target
