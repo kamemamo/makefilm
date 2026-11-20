@@ -55,7 +55,30 @@ final class FilmStripNSView: NSView {
         needsDisplay = true
     }
 
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
+    // Over a splice the pointer becomes an up/down arrow: drag to trim. Elsewhere it's a hand.
+    private var tracking: NSTrackingArea?
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let t = NSTrackingArea(rect: bounds, options: [.mouseMoved, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+                               owner: self, userInfo: nil)
+        addTrackingArea(t); tracking = t
+    }
+    override func cursorUpdate(with e: NSEvent) { updateCursor(e) }
+    override func mouseMoved(with e: NSEvent) { updateCursor(e) }
+    private func updateCursor(_ e: NSEvent) {
+        let pt = convert(e.locationInWindow, from: nil)
+        (spliceAt(pt) != nil ? NSCursor.resizeUpDown : NSCursor.openHand).set()
+    }
+
+    /// Splice under the pointer (within a few points), on the picture film of the main strip.
+    private var spliceMarks: [(index: Int, y: CGFloat)] = []
+    private var pictureSpan: ClosedRange<CGFloat> = 0...0
+    private var trimStartY: CGFloat = 0
+    private func spliceAt(_ pt: NSPoint) -> Int? {
+        guard !overview, pt.x >= pictureSpan.lowerBound - 3, pt.x <= pictureSpan.upperBound + 3 else { return nil }
+        return spliceMarks.min { abs($0.y - pt.y) < abs($1.y - pt.y) }.flatMap { abs($0.y - pt.y) <= 7 ? $0.index : nil }
+    }
 
     // MARK: drawing
 
@@ -243,17 +266,23 @@ final class FilmStripNSView: NSView {
         }
 
         // splice tape where reel segments join
+        // (each one can be grabbed to trim the cuts on either side — see Trim.swift)
+        spliceMarks.removeAll(keepingCapacity: true)
+        pictureSpan = fx...(fx + filmW)
         if ed.mode == .reel {
             var acc = 0.0
-            for s in ed.reel.dropLast() {
+            let active = ed.trimDrag?.index
+            for (i, s) in ed.reel.dropLast().enumerated() {
                 acc += s.length
                 let y = yOf(acc)
                 if y < -cellH || y > H + cellH { continue }
+                spliceMarks.append((i, y))
                 let th = min(cellH * 0.6, 40)
                 let tape = CGRect(x: fx - 3, y: y - th / 2, width: filmW + 6, height: th)
                 ctx.setFillColor(.hex(0xE6F0FF, 0.16)); ctx.fill(tape)
                 ctx.setStrokeColor(.hex(0xE6F0FF, 0.35)); ctx.setLineWidth(1); ctx.stroke(tape.insetBy(dx: 0.5, dy: 0.5))
-                ctx.setFillColor(.hex(0x9FE0FF)); ctx.fill(CGRect(x: fx, y: y - 0.75, width: filmW, height: 1.5))
+                ctx.setFillColor(i == active ? .hex(0xE3A548) : .hex(0x9FE0FF))
+                ctx.fill(CGRect(x: fx, y: y - (i == active ? 1.25 : 0.75), width: filmW, height: i == active ? 2.5 : 1.5))
             }
         }
 
@@ -469,6 +498,14 @@ final class FilmStripNSView: NSView {
 
     override func mouseDown(with e: NSEvent) {
         let pt = convert(e.locationInWindow, from: nil)
+        // Grabbing a splice trims: the cut before it at its tail, or (⌥) the cut after it at its head.
+        if let i = spliceAt(pt) {
+            let head = e.modifierFlags.contains(.option)
+            MainActor.assumeIsolated { editor?.selectedMusicID = nil; editor?.beginTrim(splice: i, head: head) }
+            trimStartY = pt.y
+            NSCursor.resizeUpDown.push()
+            return
+        }
         // On the sound reel, grabbing a music clip slides it against the picture.
         if soundX >= 0, pt.x >= soundX, pt.x <= soundX + soundW {
             let fps = F, dir = dirD, ch = Double(cellH), gy = Double(gateY)
@@ -498,6 +535,12 @@ final class FilmStripNSView: NSView {
         let dy = y - lastY
         lastY = y
         moved += abs(dy)
+        if MainActor.assumeIsolated({ editor?.trimDrag != nil }) {
+            // toward later reel time = longer (the splice, or the incoming film, follows the pointer)
+            let d = -dirD * Double((y - trimStartY) / cellH) / F
+            MainActor.assumeIsolated { editor?.updateTrim(by: d) }
+            return
+        }
         if let id = musicDrag {
             let d = dirD * Double(dy / cellH) / F
             let first = !musicUndoPushed && moved >= 3
@@ -517,6 +560,10 @@ final class FilmStripNSView: NSView {
 
     override func mouseUp(with e: NSEvent) {
         NSCursor.pop()
+        if MainActor.assumeIsolated({ editor?.trimDrag != nil }) {
+            MainActor.assumeIsolated { editor?.endTrim() }
+            return
+        }
         if let id = musicDrag {
             musicDrag = nil
             if musicUndoPushed { MainActor.assumeIsolated { editor?.commitMusicMove(id) } }

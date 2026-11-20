@@ -71,6 +71,8 @@ final class Editor {
     /// Audio peaks per clip for the optical soundtrack (filled in the background).
     @ObservationIgnored var envelopes: [UUID: AudioEnvelope] = [:]
     @ObservationIgnored var dragging = false
+    /// A splice being dragged to trim a cut (see Trim.swift).
+    @ObservationIgnored var trimDrag: TrimDrag?
     @ObservationIgnored var fling: Double = 0
     /// When the film was last cranked by hand (drag / scroll), for drawing it continuously meanwhile.
     @ObservationIgnored var lastCrankAt: CFTimeInterval = 0
@@ -473,7 +475,7 @@ final class Editor {
         jump(to: start + 0.5 / engine.fps)
     }
 
-    private func reelChanged(keepingTime t: Double) {
+    func reelChanged(keepingTime t: Double) {
         if mode == .reel {
             if reel.isEmpty && music.isEmpty {
                 mode = .source
@@ -558,6 +560,10 @@ final class Editor {
         case "o": markOut()
         case "c": cutAtGate()
         case "x": liftAtGate()
+        case "]": trimAtGate(head: false, frames: 1)
+        case "[": trimAtGate(head: false, frames: -1)
+        case "}": trimAtGate(head: true, frames: 1)
+        case "{": trimAtGate(head: true, frames: -1)
         case "z": toggleZoom()
         case "=", "+", ";": zoomIn()
         case "-": zoomOut()
