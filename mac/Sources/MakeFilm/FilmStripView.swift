@@ -456,7 +456,6 @@ final class FilmStripNSView: NSView {
         ctx.fill(CGRect(x: sx + w - 2, y: 0, width: 1, height: H))
 
         let cx = sx + w / 2, halfW = 13 * mm
-        let step: CGFloat = 2, span = Double(step / cellH) / F
         let timeAt: (CGFloat) -> Double = { [cellH, gateY] y in (p - Double((y - gateY) / (dir * cellH))) / F }
         let grease = CGColor.hex(0xF6EEB4)
         let labelAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 9, weight: .semibold),

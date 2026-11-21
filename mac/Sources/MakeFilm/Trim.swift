@@ -4,9 +4,10 @@ import Foundation
 ///
 /// - Drag a splice (or ] [ at the gate): **roll** — the splice moves, so the cut before it gets longer
 ///   by exactly what the cut after it loses (or the other way). Nothing else in the reel moves.
-/// - ⌥-drag (or } {): **the cut before only** — its tail gets longer or shorter, and everything after
-///   the splice (picture and music) moves up or back by the change.
+/// - ⌥-drag (or } {): **the cut before only** — its tail gets longer or shorter, and the picture after
+///   the splice moves up or back by the change.
 /// - ⇧-drag: **the cut after only** — its head gets longer or shorter, rippling the same way.
+/// The music on the sound reel always stays where it is: trimming moves only the picture against it.
 extension Editor {
     enum TrimKind { case roll, tail, head }
 
@@ -14,7 +15,6 @@ extension Editor {
         let index: Int                 // the cut before the splice; the cut after it is index + 1
         let kind: TrimKind
         let reel: [Segment]
-        let music: [MusicClip]
         let spliceAt: Double           // reel time of the splice before trimming
         var before = 0                 // frames the cut before gained (−: lost)
         var after = 0                  // frames the cut after gained (−: lost)
@@ -30,7 +30,7 @@ extension Editor {
         guard mode == .reel, i >= 0, i + 1 < reel.count else { return }
         stop()
         pushUndo()
-        trimDrag = TrimDrag(index: i, kind: kind, reel: reel, music: music,
+        trimDrag = TrimDrag(index: i, kind: kind, reel: reel,
                             spliceAt: reel.prefix(i + 1).reduce(0) { $0 + $1.length })
     }
 
@@ -88,7 +88,6 @@ extension Editor {
         func frames(_ s: Double, _ m: MediaClip) -> Int { Int((s * m.fps + 1e-6).rounded(.down)) }
         let aAfter = frames(ma.duration - a.end, ma), aSpare = frames(a.length, ma) - 1   // room past a's tail / frames a can lose
         let bBefore = frames(b.start, mb), bSpare = frames(b.length, mb) - 1              // room before b's head / frames b can lose
-        var ripple = 0.0
         switch t.kind {
         case .roll:
             // the splice moves n frames: a gains what b loses
@@ -100,22 +99,14 @@ extension Editor {
         case .tail:
             let k = max(-aSpare, min(n, aAfter))
             r[t.index].end = a.end + Double(k) / ma.fps
-            ripple = r[t.index].end - a.end
             t.before = k; t.after = 0
         case .head:
             // + : the picture after the splice slides later, showing earlier frames → longer
             let k = max(-bSpare, min(n, bBefore))
             r[t.index + 1].start = b.start - Double(k) / mb.fps
-            ripple = b.start - r[t.index + 1].start
             t.before = 0; t.after = k
         }
-        reel = r
-        // Rippling moves the music after the splice with the picture; a roll moves nothing else.
-        music = t.music.map { c in
-            var c = c
-            if ripple != 0, c.at >= t.spliceAt - 1e-6 { c.at = max(0, c.at + ripple) }
-            return c
-        }
+        reel = r                       // the music stays put
         trimDrag = t
     }
 }
