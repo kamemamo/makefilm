@@ -283,6 +283,7 @@ final class FilmStripNSView: NSView {
                 ctx.setStrokeColor(.hex(0xE6F0FF, 0.35)); ctx.setLineWidth(1); ctx.stroke(tape.insetBy(dx: 0.5, dy: 0.5))
                 ctx.setFillColor(i == active ? .hex(0xE3A548) : .hex(0x9FE0FF))
                 ctx.fill(CGRect(x: fx, y: y - (i == active ? 1.25 : 0.75), width: filmW, height: i == active ? 2.5 : 1.5))
+                if i == active, let t = ed.trimDrag { drawTrimLabels(ctx, t, y: y, dir: dir, x: fx + filmW + 6) }
             }
         }
 
@@ -399,6 +400,27 @@ final class FilmStripNSView: NSView {
         ctx.restoreGState()
     }
 
+    /// While a splice is dragged: on each side, which cut it is and how many frames it gained (green)
+    /// or lost (red), so it's plain which one grows and which one shrinks.
+    private func drawTrimLabels(_ ctx: CGContext, _ t: Editor.TrimDrag, y: CGFloat, dir: CGFloat, x: CGFloat) {
+        func label(_ cut: Int, _ n: Int, above: Bool) {
+            let color: NSColor = n > 0 ? NSColor(srgbRed: 0.62, green: 0.88, blue: 0.62, alpha: 1)
+                : n < 0 ? NSColor(srgbRed: 0.95, green: 0.55, blue: 0.48, alpha: 1) : NSColor(white: 0.75, alpha: 1)
+            let s = String(format: "#%d %@", cut, n == 0 ? "±0" : String(format: "%+d", n)) as NSString
+            let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .bold),
+                                                        .foregroundColor: color]
+            let sz = s.size(withAttributes: attrs)
+            let r = CGRect(x: x, y: above ? y - sz.height - 6 : y + 6, width: sz.width + 8, height: sz.height + 2)
+            ctx.setFillColor(.hex(0x0F110F, 0.85))
+            ctx.addPath(CGPath(roundedRect: r, cornerWidth: 3, cornerHeight: 3, transform: nil)); ctx.fillPath()
+            s.draw(at: CGPoint(x: r.minX + 4, y: r.minY + 1), withAttributes: attrs)
+        }
+        // The cut before the splice is on the side of earlier frames: above when the film flows up.
+        let beforeAbove = dir < 0
+        if t.kind != .head { label(t.index + 1, t.before, above: beforeAbove) }
+        if t.kind != .tail { label(t.index + 2, t.after, above: !beforeAbove) }
+    }
+
     /// Fill a rect of this flipped view with a CGImage, cropping what overflows (no black bars).
     private func drawImage(_ ctx: CGContext, _ img: CGImage, fill r: CGRect) {
         let iw = CGFloat(img.width), ih = CGFloat(img.height)
@@ -498,10 +520,11 @@ final class FilmStripNSView: NSView {
 
     override func mouseDown(with e: NSEvent) {
         let pt = convert(e.locationInWindow, from: nil)
-        // Grabbing a splice trims: the cut before it at its tail, or (⌥) the cut after it at its head.
+        // Grabbing a splice trims (see Trim.swift): it rolls — the cut on one side gains what the other
+        // loses. ⌥: only the cut before it changes, ⇧: only the cut after it; the rest of the reel follows.
         if let i = spliceAt(pt) {
-            let head = e.modifierFlags.contains(.option)
-            MainActor.assumeIsolated { editor?.selectedMusicID = nil; editor?.beginTrim(splice: i, head: head) }
+            let kind: Editor.TrimKind = e.modifierFlags.contains(.option) ? .tail : e.modifierFlags.contains(.shift) ? .head : .roll
+            MainActor.assumeIsolated { editor?.selectedMusicID = nil; editor?.beginTrim(splice: i, kind: kind) }
             trimStartY = pt.y
             NSCursor.resizeUpDown.push()
             return
