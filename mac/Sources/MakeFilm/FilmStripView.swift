@@ -68,7 +68,7 @@ final class FilmStripNSView: NSView {
     override func mouseMoved(with e: NSEvent) { updateCursor(e) }
     private func updateCursor(_ e: NSEvent) {
         let pt = convert(e.locationInWindow, from: nil)
-        (spliceAt(pt) != nil ? NSCursor.resizeUpDown : NSCursor.openHand).set()
+        (tickAt(pt) != nil ? NSCursor.pointingHand : spliceAt(pt) != nil ? NSCursor.resizeUpDown : NSCursor.openHand).set()
     }
 
     /// Splice under the pointer (within a few points), on the picture film of the main strip.
@@ -150,9 +150,11 @@ final class FilmStripNSView: NSView {
             : ed.speed != 0 && !ed.dragging ? Pulldown.position(rawP, forward: ed.speed > 0) : rawP
         let p = settle.position(target: target, moving: driven)
         let totalFrames = Int((D * F - 1e-6).rounded(.up))
+        lastP = p; totalCells = totalFrames
         let yOf: (Double) -> CGFloat = { [cellH, gateY] t in gateY - dir * CGFloat(t * F - p) * cellH }
         let thumbs = ed.thumbs
         thumbs.beginFrame()
+        tickRects.removeAll(keepingCapacity: true)
         // Big frames (zoomed in) come from the sharp store, sized to the pixels they cover;
         // the small frame stands in until the sharp one arrives.
         let needPx = picW * (window?.backingScaleFactor ?? 2)
@@ -214,6 +216,7 @@ final class FilmStripNSView: NSView {
                 } else {
                     ctx.setFillColor(.hex(0x1A120A)); ctx.fill(frame)
                 }
+                if ed.mode == .reel { drawFrameTick(ctx, frame, cell: k, selected: ed.frameSelection.contains(k)) }
             } else {
                 // leader
                 ctx.setFillColor(.hex(0x3D2B18)); ctx.fill(frame)
@@ -400,6 +403,53 @@ final class FilmStripNSView: NSView {
         ctx.restoreGState()
     }
 
+    // MARK: ticking frames (see FrameSelect.swift)
+
+    private var tickRects: [(cell: Int, rect: CGRect)] = []
+    private var lastP: Double = 0
+    private var totalCells = 0
+    private var paint: (on: Bool, from: Int)?
+    private var tickClick = false
+
+    /// A ticked frame is washed red and outlined; every frame in the reel has a box at its top right.
+    private func drawFrameTick(_ ctx: CGContext, _ frame: CGRect, cell k: Int, selected: Bool) {
+        let red = CGColor.hex(0xE5533D)
+        if selected {
+            ctx.setFillColor(.hex(0xE5533D, 0.32)); ctx.fill(frame)
+            ctx.setStrokeColor(red); ctx.setLineWidth(2); ctx.stroke(frame.insetBy(dx: 1, dy: 1))
+        }
+        guard !overview else { return }
+        let size = min(18, max(11, frame.height * 0.16))
+        let r = CGRect(x: frame.maxX - size - 4, y: frame.minY + 4, width: size, height: size)
+        tickRects.append((k, r.insetBy(dx: -3, dy: -3)))
+        let box = CGPath(roundedRect: r, cornerWidth: 3, cornerHeight: 3, transform: nil)
+        ctx.addPath(box)
+        ctx.setFillColor(selected ? red : .hex(0x000000, 0.35)); ctx.fillPath()
+        ctx.addPath(box)
+        ctx.setStrokeColor(selected ? red : .hex(0xFFFFFF, 0.75)); ctx.setLineWidth(1.2); ctx.strokePath()
+        if selected {
+            ctx.setStrokeColor(.white); ctx.setLineWidth(max(1.5, size * 0.13)); ctx.setLineCap(.round); ctx.setLineJoin(.round)
+            ctx.move(to: CGPoint(x: r.minX + size * 0.25, y: r.midY))
+            ctx.addLine(to: CGPoint(x: r.minX + size * 0.43, y: r.maxY - size * 0.27))
+            ctx.addLine(to: CGPoint(x: r.maxX - size * 0.22, y: r.minY + size * 0.27))
+            ctx.strokePath()
+        }
+    }
+
+    private func tickAt(_ pt: NSPoint) -> Int? { tickRects.first { $0.rect.contains(pt) }?.cell }
+
+    /// The strip cell under a y position (from the last drawing).
+    private func cell(atY y: CGFloat) -> Int {
+        Int((lastP - Double((y - gateY) / (CGFloat(dirD) * cellH))).rounded(.down))
+    }
+
+    private func reportSelection() {
+        MainActor.assumeIsolated {
+            guard let ed = editor else { return }
+            ed.toast(ed.hasFrameSelection ? L("%ld コマ選択（⌫ で削除・esc で解除）", ed.frameSelection.count) : L("選択を解除しました"))
+        }
+    }
+
     /// While a splice is dragged: on each side, which cut it is and how many frames it gained (green)
     /// or lost (red), so it's plain which one grows and which one shrinks.
     private func drawTrimLabels(_ ctx: CGContext, _ t: Editor.TrimDrag, y: CGFloat, dir: CGFloat, x: CGFloat) {
@@ -519,6 +569,26 @@ final class FilmStripNSView: NSView {
 
     override func mouseDown(with e: NSEvent) {
         let pt = convert(e.locationInWindow, from: nil)
+        // The box on a frame ticks it for deleting; dragging on from there ticks (or unticks) a run,
+        // ⇧-click ticks everything from the last ticked frame.
+        if let k = tickAt(pt) {
+            MainActor.assumeIsolated {
+                guard let ed = editor else { return }
+                ed.selectedMusicID = nil
+                if e.modifierFlags.contains(.shift) {
+                    ed.extendFrameSelection(to: k); paint = nil
+                } else {
+                    let on = !ed.frameSelection.contains(k)
+                    ed.setFrame(k, selected: on); ed.frameAnchor = k
+                    paint = (on, k)
+                }
+            }
+            reportSelection()
+            tickClick = true
+            lastY = pt.y; moved = 0
+            NSCursor.pointingHand.push()
+            return
+        }
         // Grabbing a splice trims (see Trim.swift): it rolls — the cut on one side gains what the other
         // loses. ⌥: only the cut before it changes, ⇧: only the cut after it; the rest of the reel follows.
         if let i = spliceAt(pt) {
@@ -557,6 +627,15 @@ final class FilmStripNSView: NSView {
         let dy = y - lastY
         lastY = y
         moved += abs(dy)
+        if let paint {
+            let k = cell(atY: y), n = totalCells
+            MainActor.assumeIsolated {
+                guard let ed = editor else { return }
+                for i in min(paint.from, k)...max(paint.from, k) where i >= 0 && i < n { ed.setFrame(i, selected: paint.on) }
+            }
+            reportSelection()
+            return
+        }
         if MainActor.assumeIsolated({ editor?.trimDrag != nil }) {
             // toward later reel time = longer (the splice, or the incoming film, follows the pointer)
             let d = -dirD * Double((y - trimStartY) / cellH) / F
@@ -582,6 +661,10 @@ final class FilmStripNSView: NSView {
 
     override func mouseUp(with e: NSEvent) {
         NSCursor.pop()
+        if tickClick {
+            tickClick = false; paint = nil
+            return
+        }
         if MainActor.assumeIsolated({ editor?.trimDrag != nil }) {
             MainActor.assumeIsolated { editor?.endTrim() }
             return

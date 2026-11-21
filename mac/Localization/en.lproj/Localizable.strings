@@ -162,3 +162,6 @@
 "#%ld %+ld コマ" = "#%ld %+ld frames";
 "継ぎ目がありません" = "There is no splice in the reel";
 "これ以上動かせません" = "Can't trim any further";
+"%ld コマを削除しました" = "Deleted %ld frames";
+"%ld コマ選択（⌫ で削除・esc で解除）" = "%ld frames ticked (⌫ deletes, esc clears)";
+"選択を解除しました" = "Cleared the ticks";

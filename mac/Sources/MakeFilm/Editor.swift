@@ -24,6 +24,7 @@ final class Editor {
     /// Keep the thumbnails in step with the density (the material's rate changes with what's loaded).
     func syncStripRate() {
         guard abs(thumbs.fps - stripRate) > 1e-6 || abs(thumbsHi.fps - stripRate) > 1e-6 else { return }
+        clearFrameSelection()
         thumbs.fps = stripRate
         thumbsHi.fps = stripRate
         for m in media { thumbs.updateMaxIndex(m); thumbsHi.updateMaxIndex(m) }
@@ -73,6 +74,9 @@ final class Editor {
     @ObservationIgnored var dragging = false
     /// A splice being dragged to trim a cut (see Trim.swift).
     @ObservationIgnored var trimDrag: TrimDrag?
+    /// Frames ticked on the strip for deleting (strip cells; see FrameSelect.swift).
+    @ObservationIgnored var frameSelection: Set<Int> = []
+    @ObservationIgnored var frameAnchor: Int?
     @ObservationIgnored var fling: Double = 0
     /// When the film was last cranked by hand (drag / scroll), for drawing it continuously meanwhile.
     @ObservationIgnored var lastCrankAt: CFTimeInterval = 0
@@ -203,6 +207,7 @@ final class Editor {
         rememberPosition()
         mode = m
         if m == .source { selectedMusicID = nil }
+        clearFrameSelection()
         reloadPlayer(at: m == .source ? (currentMedia?.lastTime ?? 0) : reelTime)
     }
 
@@ -476,6 +481,7 @@ final class Editor {
     }
 
     func reelChanged(keepingTime t: Double) {
+        clearFrameSelection()
         if mode == .reel {
             if reel.isEmpty && music.isEmpty {
                 mode = .source
@@ -537,12 +543,16 @@ final class Editor {
         case 36, 76: splice(); return true                       // return / enter
         case 51, 117:                                            // delete
             // a selected piece of music goes first; otherwise the picture cut at the gate
-            if mode == .reel, let id = selectedMusicID { removeMusic(id) } else { liftAtGate() }
+            if mode == .reel, hasFrameSelection { deleteSelectedFrames() }
+            else if mode == .reel, let id = selectedMusicID { removeMusic(id) } else { liftAtGate() }
             return true
         case 123: step(-n); return true                          // ←
         case 124: step(n); return true                           // →
         case 125: step(n * direction); return true               // ↓ film moves down
         case 126: step(-n * direction); return true              // ↑
+        case 53:                                                 // esc: untick the frames
+            if hasFrameSelection { clearFrameSelection(); toast(L("選択を解除しました")); return true }
+            return false
         case 115: home(); return true
         case 119: end(); return true
         default: break
